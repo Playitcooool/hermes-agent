@@ -7,7 +7,6 @@ import json
 import logging
 import os
 import queue
-import re
 import subprocess
 import sys
 import threading
@@ -3975,41 +3974,13 @@ def _(rid, params: dict) -> dict:
 # ── Methods: prompt ──────────────────────────────────────────────────
 
 
-_LEARNING_THREAD_EXPLICIT_INTENT_RE = re.compile(
-    r"(?:"
-    r"\b(?:structured|multi[-\s]?step|step[-\s]?by[-\s]?step|ongoing)\s+"
-    r"(?:lesson|course|tutorial)\b"
-    r"|"
-    r"\bteach\s+me\b(?=[\s\S]*\b(?:structured|lesson|course|over\s+time)\b)"
-    r")",
-    re.IGNORECASE,
-)
-_LEARNING_THREAD_NAME_RE = re.compile(r"\blearning\s+thread\b", re.IGNORECASE)
-_LEARNING_THREAD_TEACHING_TERM_RE = re.compile(
-    r"\b(?:learn(?:ing)?|lesson|teach(?:ing)?|tutorial|course)\b",
-    re.IGNORECASE,
-)
-
-
 def _prompt_force_tool(text: Any, requested: Any = None) -> str | None:
     """Resolve a one-turn tool requirement, including durable learning UI intents."""
     if isinstance(requested, str) and requested.strip():
         return requested.strip()
-    if not isinstance(text, str):
-        return None
+    from learning_thread.intent import should_force_learning_thread
 
-    normalized = text.strip()
-    if not normalized:
-        return None
-    if (
-        "[Learning Thread BTW side panel]" in normalized
-        or "learning_thread(action=" in normalized
-        or (
-            _LEARNING_THREAD_NAME_RE.search(normalized)
-            and _LEARNING_THREAD_TEACHING_TERM_RE.search(normalized)
-        )
-        or _LEARNING_THREAD_EXPLICIT_INTENT_RE.search(normalized)
-    ):
+    if should_force_learning_thread(text):
         return "learning_thread"
     return None
 

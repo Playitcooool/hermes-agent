@@ -428,6 +428,11 @@ def run_conversation(
         persist_user_message = _sanitize_surrogates(persist_user_message)
     if isinstance(force_tool, str):
         force_tool = force_tool.strip()
+    if not force_tool and "learning_thread" in agent.valid_tool_names:
+        from learning_thread.intent import should_force_learning_thread
+
+        if should_force_learning_thread(user_message):
+            force_tool = "learning_thread"
     if force_tool and force_tool not in agent.valid_tool_names:
         force_tool = None
 

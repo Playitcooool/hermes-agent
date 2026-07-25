@@ -702,6 +702,55 @@ def test_run_conversation_codex_plain_text(monkeypatch):
     assert result["messages"][-1]["content"] == "OK"
 
 
+def test_run_conversation_codex_infers_learning_thread_force(monkeypatch):
+    monkeypatch.setattr(
+        run_agent,
+        "get_tool_definitions",
+        lambda **kwargs: [
+            {
+                "type": "function",
+                "function": {
+                    "name": name,
+                    "description": f"Use {name}.",
+                    "parameters": {"type": "object", "properties": {}},
+                },
+            }
+            for name in ("learning_thread", "todo")
+        ],
+    )
+    monkeypatch.setattr(run_agent, "check_toolset_requirements", lambda: {})
+    agent = run_agent.AIAgent(
+        model="gpt-5-codex",
+        base_url="https://chatgpt.com/backend-api/codex",
+        api_key="codex-token",
+        quiet_mode=True,
+        max_iterations=4,
+        skip_context_files=True,
+        skip_memory=True,
+    )
+    agent._cleanup_task_resources = lambda task_id: None
+    agent._persist_session = lambda messages, history=None: None
+    agent._save_trajectory = lambda messages, user_message, completed: None
+    captured = {}
+
+    def _capture(api_kwargs):
+        captured.update(api_kwargs)
+        return _codex_message_response("OK")
+
+    monkeypatch.setattr(agent, "_interruptible_api_call", _capture)
+
+    result = agent.run_conversation(
+        "Start a structured multi-step Learning Thread lesson teaching me generators."
+    )
+
+    assert result["completed"] is True
+    assert captured["tool_choice"] == {
+        "type": "function",
+        "name": "learning_thread",
+    }
+    assert [tool["name"] for tool in captured["tools"]] == ["learning_thread"]
+
+
 def test_run_conversation_codex_empty_output_with_output_text(monkeypatch):
     """Regression: empty response.output + valid output_text should succeed,
     not trigger retry/fallback. The validation stage must defer to
