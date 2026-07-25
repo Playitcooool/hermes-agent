@@ -85,3 +85,17 @@ export function learningProgress(thread: LearningThread): number {
 
   return Math.min(100, Math.round((thread.sections.length / thread.outline.length) * 100))
 }
+
+export function shouldStartLearningThread(text: string): boolean {
+  const normalized = text.trim()
+
+  if (!normalized) {
+    return false
+  }
+
+  return (
+    (/\blearning thread\b/i.test(normalized) && /\b(learn|lesson|teach|tutorial|course)\b/i.test(normalized)) ||
+    /\b(structured|multi[-\s]?step|step[-\s]?by[-\s]?step|ongoing)\s+(lesson|course|tutorial)\b/i.test(normalized) ||
+    /\bteach me\b[\s\S]*\b(structured|lesson|course|over time)\b/i.test(normalized)
+  )
+}

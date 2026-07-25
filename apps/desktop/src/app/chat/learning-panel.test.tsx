@@ -62,12 +62,13 @@ describe('LearningPanel BTW side thread', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Start BTW thread' }))
 
     await waitFor(() => expect(onPrompt).toHaveBeenCalledOnce())
-    const [instruction, displayText] = onPrompt.mock.calls[0]
+    const [instruction, displayText, forceTool] = onPrompt.mock.calls[0]
 
     expect(instruction).toContain('[Learning Thread BTW side panel]')
     expect(instruction).toContain(baseThread.sections[0].content)
     expect(instruction).toContain('learning_thread(action="branch_open")')
     expect(displayText).toBe('BTW · Why does this save memory?')
+    expect(forceTool).toBe('learning_thread')
     await waitFor(() => expect((composer as HTMLTextAreaElement).value).toBe(''))
   })
 
@@ -111,5 +112,6 @@ describe('LearningPanel BTW side thread', () => {
     await waitFor(() => expect(onPrompt).toHaveBeenCalledOnce())
     expect(onPrompt.mock.calls[0][0]).toContain('active side branch')
     expect(onPrompt.mock.calls[0][1]).toBe('BTW · What about an infinite stream?')
+    expect(onPrompt.mock.calls[0][2]).toBe('learning_thread')
   })
 })

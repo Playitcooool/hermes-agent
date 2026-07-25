@@ -567,6 +567,8 @@ def build_api_kwargs(agent, api_messages: list) -> dict:
 
     if agent.api_mode == "codex_responses":
         _ct = agent._get_transport()
+        forced_tool = getattr(agent, "_ephemeral_tool_choice", None)
+        agent._ephemeral_tool_choice = None
         is_github_responses = (
             base_url_host_matches(agent.base_url, "models.github.ai")
             or base_url_host_matches(agent.base_url, "api.githubcopilot.com")
@@ -629,6 +631,7 @@ def build_api_kwargs(agent, api_messages: list) -> dict:
             replay_encrypted_reasoning=bool(
                 getattr(agent, "_codex_reasoning_replay_enabled", True)
             ),
+            tool_choice=forced_tool,
         )
 
     # ── chat_completions (default) ─────────────────────────────────────

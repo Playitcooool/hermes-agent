@@ -300,6 +300,21 @@ def test_build_api_kwargs_codex(monkeypatch):
     assert "extra_body" not in kwargs
 
 
+def test_build_api_kwargs_codex_can_force_one_tool_for_the_next_call(monkeypatch):
+    agent = _build_agent(monkeypatch)
+    agent._ephemeral_tool_choice = "terminal"
+
+    kwargs = agent._build_api_kwargs(
+        [
+            {"role": "system", "content": "Use the required tool."},
+            {"role": "user", "content": "Run it"},
+        ]
+    )
+
+    assert kwargs["tool_choice"] == {"type": "function", "name": "terminal"}
+    assert agent._ephemeral_tool_choice is None
+
+
 def test_build_api_kwargs_codex_clamps_minimal_effort(monkeypatch):
     """'minimal' reasoning effort is clamped to 'low' on the Responses API.
 

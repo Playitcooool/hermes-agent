@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
-import { activeLearningBranch, activeLearningSection, learningProgress, type LearningThread } from './learning'
+import {
+  activeLearningBranch,
+  activeLearningSection,
+  learningProgress,
+  shouldStartLearningThread,
+  type LearningThread
+} from './learning'
 
 function thread(): LearningThread {
   return {
@@ -58,4 +64,21 @@ describe('learning thread selectors', () => {
   it('calculates materialized outline progress', () => {
     expect(learningProgress(thread())).toBe(50)
   })
+})
+
+describe('learning thread activation intent', () => {
+  it.each([
+    'Start a structured lesson teaching me Python generators.',
+    'Teach me linear algebra as a multi-step course.',
+    'Use Learning Thread mode for this lesson.'
+  ])('recognizes explicit sustained teaching: %s', text => {
+    expect(shouldStartLearningThread(text)).toBe(true)
+  })
+
+  it.each(['Why is the sky blue?', 'Teach me why the sky is blue.', 'Write a tutorial file for this repo.'])(
+    'leaves ordinary one-off requests alone: %s',
+    text => {
+      expect(shouldStartLearningThread(text)).toBe(false)
+    }
+  )
 })

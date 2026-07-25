@@ -29,6 +29,7 @@ import {
 } from '@/store/composer'
 import { clearNotifications, notify, notifyError } from '@/store/notifications'
 import { requestDesktopOnboarding } from '@/store/onboarding'
+import { shouldStartLearningThread } from '@/store/learning'
 import {
   $busy,
   $messages,
@@ -90,6 +91,7 @@ interface PromptActionsOptions {
 interface SubmitTextOptions {
   attachments?: ComposerAttachment[]
   displayText?: string
+  forceTool?: string
   fromQueue?: boolean
 }
 
@@ -218,6 +220,7 @@ export function usePromptActions({
     async (rawText: string, options?: SubmitTextOptions) => {
       const promptText = rawText.trim()
       const visibleText = (options?.displayText ?? promptText).trim()
+      const forceTool = options?.forceTool ?? (shouldStartLearningThread(promptText) ? 'learning_thread' : undefined)
       const usingComposerAttachments = !options?.attachments
       const attachments = options?.attachments ?? $composerAttachments.get()
 
@@ -334,7 +337,8 @@ export function usePromptActions({
         await requestGateway('prompt.submit', {
           session_id: sessionId,
           text,
-          ...(options?.displayText !== undefined && { display_text: options.displayText })
+          ...(options?.displayText !== undefined && { display_text: options.displayText }),
+          ...(forceTool !== undefined && { force_tool: forceTool })
         })
 
         if (usingComposerAttachments) {

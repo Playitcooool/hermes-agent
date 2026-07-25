@@ -19,7 +19,7 @@ import {
 
 interface LearningPanelProps {
   gateway: HermesGateway | null
-  onPrompt: (text: string, displayText?: string) => Promise<boolean> | boolean
+  onPrompt: (text: string, displayText?: string, forceTool?: string) => Promise<boolean> | boolean
   sessionId: null | string
 }
 
@@ -126,7 +126,7 @@ export function LearningPanel({ gateway, onPrompt, sessionId }: LearningPanelPro
     setBranchSubmitting(true)
 
     try {
-      const submitted = await onPrompt(instruction, `BTW · ${question}`)
+      const submitted = await onPrompt(instruction, `BTW · ${question}`, 'learning_thread')
 
       if (submitted) {
         setBranchDraft('')
@@ -332,7 +332,9 @@ export function LearningPanel({ gateway, onPrompt, sessionId }: LearningPanelPro
                 <Button
                   onClick={() =>
                     void onPrompt(
-                      'Continue the durable Learning Thread with the next outlined section. You MUST use learning_thread(action="continue").'
+                      'Continue the durable Learning Thread with the next outlined section. You MUST use learning_thread(action="continue").',
+                      undefined,
+                      'learning_thread'
                     )
                   }
                   size="sm"

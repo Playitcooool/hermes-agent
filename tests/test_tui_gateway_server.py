@@ -3162,9 +3162,11 @@ def test_prompt_submit_persists_display_text_but_sends_model_instruction(monkeyp
             conversation_history=None,
             stream_callback=None,
             persist_user_message=None,
+            force_tool=None,
         ):
             seen["prompt"] = prompt
             seen["persist_user_message"] = persist_user_message
+            seen["force_tool"] = force_tool
             return {
                 "final_response": "branch answer",
                 "messages": [
@@ -3195,6 +3197,7 @@ def test_prompt_submit_persists_display_text_but_sends_model_instruction(monkeyp
                     "session_id": "sid",
                     "text": "[internal branch routing]\nWhy?",
                     "display_text": "BTW · Why?",
+                    "force_tool": "learning_thread",
                 },
             }
         )
@@ -3202,6 +3205,7 @@ def test_prompt_submit_persists_display_text_but_sends_model_instruction(monkeyp
         assert resp.get("result")
         assert seen["prompt"] == "[internal branch routing]\nWhy?"
         assert seen["persist_user_message"] == "BTW · Why?"
+        assert seen["force_tool"] == "learning_thread"
         assert server._sessions["sid"]["history"][0] == {
             "role": "user",
             "content": "BTW · Why?",

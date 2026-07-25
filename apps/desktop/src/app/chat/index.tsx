@@ -74,7 +74,7 @@ interface ChatViewProps extends Omit<React.ComponentProps<'div'>, 'onSubmit'> {
   onRemoveAttachment: (id: string) => void
   onSubmit: (
     text: string,
-    options?: { attachments?: ComposerAttachment[]; displayText?: string; fromQueue?: boolean }
+    options?: { attachments?: ComposerAttachment[]; displayText?: string; forceTool?: string; fromQueue?: boolean }
   ) => Promise<boolean> | boolean
   onThreadMessagesChange: (messages: readonly ThreadMessage[]) => void
   onEdit: (message: AppendMessage) => Promise<void>
@@ -378,7 +378,7 @@ export function ChatView({
         </div>
         <LearningPanel
           gateway={gateway}
-          onPrompt={(text, displayText) => onSubmit(text, { displayText })}
+          onPrompt={(text, displayText, forceTool) => onSubmit(text, { displayText, forceTool })}
           sessionId={activeSessionId}
         />
       </div>

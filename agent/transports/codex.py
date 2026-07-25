@@ -149,7 +149,12 @@ class ResponsesApiTransport(ProviderTransport):
         }
         if response_tools:
             kwargs["tools"] = response_tools
-            kwargs["tool_choice"] = "auto"
+            forced_tool = params.get("tool_choice")
+            kwargs["tool_choice"] = (
+                {"type": "function", "name": forced_tool}
+                if isinstance(forced_tool, str) and forced_tool
+                else "auto"
+            )
             kwargs["parallel_tool_calls"] = True
 
         session_id = params.get("session_id")

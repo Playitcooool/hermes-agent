@@ -3980,6 +3980,9 @@ def _(rid, params: dict) -> dict:
     display_text = params.get("display_text")
     if display_text is not None and not isinstance(display_text, str):
         return _err(rid, 4004, "display_text must be a string")
+    force_tool = params.get("force_tool")
+    if force_tool is not None and not isinstance(force_tool, str):
+        return _err(rid, 4004, "force_tool must be a string")
     truncate_user_ordinal = params.get("truncate_before_user_ordinal")
     session, err = _sess_nowait(params, rid)
     if err:
@@ -4033,7 +4036,14 @@ def _(rid, params: dict) -> dict:
                 session["running"] = False
                 _clear_inflight_turn(session)
             return
-        _run_prompt_submit(rid, sid, session, text, display_text=display_text)
+        _run_prompt_submit(
+            rid,
+            sid,
+            session,
+            text,
+            display_text=display_text,
+            force_tool=force_tool,
+        )
 
     threading.Thread(target=run_after_agent_ready, daemon=True).start()
     return _ok(rid, {"status": "streaming"})
@@ -4187,7 +4197,13 @@ def _start_notification_poller(sid: str, session: dict) -> threading.Event:
 
 
 def _run_prompt_submit(
-    rid, sid: str, session: dict, text: Any, *, display_text: str | None = None
+    rid,
+    sid: str,
+    session: dict,
+    text: Any,
+    *,
+    display_text: str | None = None,
+    force_tool: str | None = None,
 ) -> None:
     with session["history_lock"]:
         history = list(session["history"])
@@ -4330,6 +4346,8 @@ def _run_prompt_submit(
                     run_kwargs["task_id"] = session["session_key"]
                 if display_text is not None and "persist_user_message" in run_parameters:
                     run_kwargs["persist_user_message"] = display_text
+                if force_tool is not None and "force_tool" in run_parameters:
+                    run_kwargs["force_tool"] = force_tool
             except (TypeError, ValueError):
                 pass
             result = agent.run_conversation(run_message, **run_kwargs)
