@@ -4443,6 +4443,34 @@ def _run_prompt_submit(
                 raw = str(result)
                 status = "complete"
 
+            if status == "complete" and isinstance(raw, str) and raw.strip():
+                try:
+                    from learning_thread.intent import (
+                        is_explicit_learning_thread_lesson,
+                    )
+                    from learning_thread.markdown_fallback import (
+                        materialize_structured_lesson_fallback,
+                    )
+
+                    if is_explicit_learning_thread_lesson(text):
+                        fallback_state = materialize_structured_lesson_fallback(
+                            session.get("session_key") or sid,
+                            str(text),
+                            raw,
+                        )
+                        if fallback_state is not None:
+                            _emit(
+                                "learning.updated",
+                                sid,
+                                {"learning_thread": fallback_state},
+                            )
+                except Exception as exc:
+                    logger.warning(
+                        "Learning Thread Markdown fallback failed for session %s: %s",
+                        session.get("session_key") or sid,
+                        exc,
+                    )
+
             payload = {"text": raw, "usage": _get_usage(agent), "status": status}
             if last_reasoning:
                 payload["reasoning"] = last_reasoning

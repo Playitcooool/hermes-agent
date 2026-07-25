@@ -3249,6 +3249,78 @@ def test_prompt_force_tool_preserves_explicit_request():
     assert server._prompt_force_tool("ordinary prompt", "terminal") == "terminal"
 
 
+def test_prompt_submit_materializes_markdown_lesson_fallback(monkeypatch, tmp_path):
+    lesson = """# Learning Thread: Python Generators
+
+1. **Lazy values**
+2. **Generator functions**
+
+## Section 1 — Lazy values
+
+Generators produce values on demand.
+
+## Checkpoint 1
+
+Why can this reduce memory usage?
+"""
+
+    class _Agent:
+        def run_conversation(
+            self,
+            prompt,
+            conversation_history=None,
+            stream_callback=None,
+            task_id=None,
+            force_tool=None,
+        ):
+            return {
+                "final_response": lesson,
+                "messages": [
+                    {"role": "user", "content": prompt},
+                    {"role": "assistant", "content": lesson},
+                ],
+            }
+
+    class _ImmediateThread:
+        def __init__(self, target=None, daemon=None):
+            self._target = target
+
+        def start(self):
+            self._target()
+
+    events = []
+    monkeypatch.setenv("HERMES_HOME", str(tmp_path))
+    server._sessions["sid"] = _session(agent=_Agent())
+    try:
+        monkeypatch.setattr(server.threading, "Thread", _ImmediateThread)
+        monkeypatch.setattr(server, "_get_usage", lambda _a: {})
+        monkeypatch.setattr(server, "render_message", lambda _t, _c: "")
+        monkeypatch.setattr(
+            server,
+            "_emit",
+            lambda name, sid, payload=None: events.append((name, sid, payload)),
+        )
+
+        response = server.handle_request(
+            {
+                "id": "1",
+                "method": "prompt.submit",
+                "params": {
+                    "session_id": "sid",
+                    "text": "Start a structured Learning Thread lesson about generators.",
+                },
+            }
+        )
+
+        assert response.get("result")
+        updates = [payload for name, _sid, payload in events if name == "learning.updated"]
+        assert len(updates) == 1
+        assert updates[0]["learning_thread"]["topic"] == "Python Generators"
+        assert updates[0]["learning_thread"]["active_branch_id"] is None
+    finally:
+        server._sessions.pop("sid", None)
+
+
 def test_prompt_submit_can_truncate_before_user_ordinal(monkeypatch):
     """Desktop user-message edits should restart the turn from the edited user."""
 

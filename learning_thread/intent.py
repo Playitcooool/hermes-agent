@@ -17,9 +17,25 @@ _EXPLICIT_LESSON_RE = re.compile(
 )
 _THREAD_NAME_RE = re.compile(r"\blearning\s+thread\b", re.IGNORECASE)
 _TEACHING_TERM_RE = re.compile(
-    r"\b(?:learn(?:ing)?|lesson|teach(?:ing)?|tutorial|course)\b",
+    r"\b(?:learn|lesson|teach(?:ing)?|tutorial|course)\b",
     re.IGNORECASE,
 )
+
+
+def is_explicit_learning_thread_lesson(text: Any) -> bool:
+    """Return whether text explicitly requests a sustained structured lesson."""
+    if not isinstance(text, str):
+        return False
+    normalized = text.strip()
+    if not normalized:
+        return False
+    return bool(
+        (
+            _THREAD_NAME_RE.search(normalized)
+            and _TEACHING_TERM_RE.search(normalized)
+        )
+        or _EXPLICIT_LESSON_RE.search(normalized)
+    )
 
 
 def should_force_learning_thread(text: Any) -> bool:
@@ -27,14 +43,11 @@ def should_force_learning_thread(text: Any) -> bool:
     if not isinstance(text, str):
         return False
     normalized = text.strip()
-    if not normalized:
-        return False
     return bool(
-        "[Learning Thread BTW side panel]" in normalized
-        or "learning_thread(action=" in normalized
-        or (
-            _THREAD_NAME_RE.search(normalized)
-            and _TEACHING_TERM_RE.search(normalized)
+        normalized
+        and (
+            "[Learning Thread BTW side panel]" in normalized
+            or "learning_thread(action=" in normalized
+            or is_explicit_learning_thread_lesson(normalized)
         )
-        or _EXPLICIT_LESSON_RE.search(normalized)
     )

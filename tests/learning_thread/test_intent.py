@@ -1,4 +1,7 @@
-from learning_thread.intent import should_force_learning_thread
+from learning_thread.intent import (
+    is_explicit_learning_thread_lesson,
+    should_force_learning_thread,
+)
 
 
 def test_explicit_lesson_intent_is_detected_in_either_word_order():
@@ -23,3 +26,13 @@ def test_panel_control_prompts_are_detected():
 
 def test_one_off_question_is_not_detected():
     assert not should_force_learning_thread("Why is the daytime sky blue?")
+
+
+def test_btw_control_is_not_mistaken_for_a_new_lesson():
+    prompt = (
+        "[Learning Thread BTW side panel]\n"
+        'Use learning_thread(action="branch_open") for this follow-up.'
+    )
+
+    assert should_force_learning_thread(prompt)
+    assert not is_explicit_learning_thread_lesson(prompt)
