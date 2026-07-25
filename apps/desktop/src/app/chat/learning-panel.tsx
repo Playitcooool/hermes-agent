@@ -24,6 +24,10 @@ interface LearningPanelProps {
   sessionId: null | string
 }
 
+interface LearningMainControlsProps {
+  onPrompt: (text: string, displayText?: string, forceTool?: string) => Promise<boolean> | boolean
+}
+
 const readinessLabels = {
   understood: 'Understood',
   mostly_understood: 'Mostly understood',
@@ -52,6 +56,34 @@ function noteMarkdown(thread: LearningThread): string {
     .join('\n\n')
 
   return `# ${thread.topic}\n\n## Learning goal\n\n${thread.objective}\n\n${sections}\n\n## Side questions\n\n${branches || '_None_'}\n`
+}
+
+export function LearningMainControls({ onPrompt }: LearningMainControlsProps) {
+  const thread = useStore($learningThread)
+  const loading = useStore($learningLoading)
+
+  if (!thread || activeLearningBranch(thread)) {
+    return null
+  }
+
+  return (
+    <div className="pointer-events-none absolute right-0 bottom-[calc(var(--composer-measured-height)+0.5rem)] left-0 z-20 flex justify-center px-4">
+      <Button
+        className="pointer-events-auto min-w-48 shadow-lg"
+        disabled={loading}
+        onClick={() =>
+          void onPrompt(
+            'Continue the durable Learning Thread with the next outlined section. You MUST use learning_thread(action="continue").',
+            undefined,
+            'learning_thread'
+          )
+        }
+        size="sm"
+      >
+        Continue lesson <Codicon name="arrow-right" />
+      </Button>
+    </div>
+  )
 }
 
 export function LearningPanel({ gateway, onPrompt, sessionId }: LearningPanelProps) {
@@ -94,7 +126,7 @@ export function LearningPanel({ gateway, onPrompt, sessionId }: LearningPanelPro
     event?.preventDefault()
     const question = branchDraft.trim()
 
-    if (!question || !activeBranch || branchSubmitting || loading) {
+    if (!question || branchSubmitting || loading || (branch && !activeBranch)) {
       return
     }
 
@@ -204,16 +236,23 @@ export function LearningPanel({ gateway, onPrompt, sessionId }: LearningPanelPro
             })}
           </ol>
 
-          {branch ? (
-            <section className="mt-5 rounded-lg border border-warning/40 bg-warning/5 p-3">
+          <section className="mt-5 rounded-lg border border-border/60 bg-background/50 p-3">
+            <div className="font-mondwest text-xs text-display text-text-tertiary">Current section</div>
+            <h3 className="mt-1 text-sm font-medium text-text-primary">{section?.title}</h3>
+            {section?.readiness && (
+              <div className="mt-2 text-xs text-text-secondary">{readinessLabels[section.readiness]}</div>
+            )}
+          </section>
+
+          <section className="mt-3 rounded-lg border border-warning/40 bg-warning/5 p-3">
               <div className="flex items-center justify-between gap-2">
                 <div>
                   <div className="font-mondwest text-xs text-display text-warning">BTW thread</div>
                   <h3 className="mt-1 text-sm font-medium text-text-primary">
-                    {branch.title}
+                    {branch?.title ?? 'Ask without leaving the lesson'}
                   </h3>
                 </div>
-                {!activeBranch && (
+                {branch && !activeBranch && (
                   <Button
                     aria-label="Close BTW panel"
                     className="size-7 p-0"
@@ -259,14 +298,14 @@ export function LearningPanel({ gateway, onPrompt, sessionId }: LearningPanelPro
                 </p>
               )}
 
-              {activeBranch && (
+              {(activeBranch || !branch) && (
                 <form className="mt-3 space-y-2" onSubmit={event => void submitBranchQuestion(event)}>
                   <Textarea
-                    aria-label="Follow up in BTW thread"
+                    aria-label={activeBranch ? 'Follow up in BTW thread' : 'Ask a BTW question'}
                     disabled={branchSubmitting || loading}
                     onChange={event => setBranchDraft(event.target.value)}
                     onKeyDown={handleBranchKeyDown}
-                    placeholder="Follow up here…"
+                    placeholder={activeBranch ? 'Follow up here…' : 'Ask a side question…'}
                     rows={3}
                     value={branchDraft}
                   />
@@ -276,7 +315,7 @@ export function LearningPanel({ gateway, onPrompt, sessionId }: LearningPanelPro
                     size="sm"
                     type="submit"
                   >
-                    <Codicon name="send" /> Send follow-up
+                    <Codicon name="send" /> {activeBranch ? 'Send follow-up' : 'Start BTW thread'}
                   </Button>
                 </form>
               )}
@@ -297,32 +336,6 @@ export function LearningPanel({ gateway, onPrompt, sessionId }: LearningPanelPro
                 </Button>
               ) : null}
             </section>
-          ) : (
-            <section className="mt-5 rounded-lg border border-border/60 bg-background/50 p-3">
-              <div className="font-mondwest text-xs text-display text-text-tertiary">Current section</div>
-              <h3 className="mt-1 text-sm font-medium text-text-primary">{section?.title}</h3>
-              {section?.readiness && (
-                <div className="mt-2 text-xs text-text-secondary">{readinessLabels[section.readiness]}</div>
-              )}
-              <div className="mt-3 grid grid-cols-1 gap-2">
-                <Button
-                  onClick={() =>
-                    void onPrompt(
-                      'Continue the durable Learning Thread with the next outlined section. You MUST use learning_thread(action="continue").',
-                      undefined,
-                      'learning_thread'
-                    )
-                  }
-                  size="sm"
-                >
-                  Continue lesson <Codicon name="arrow-right" />
-                </Button>
-                <p className="rounded-md border border-border/60 bg-muted/30 px-2.5 py-2 text-xs text-text-secondary">
-                  Use <code>/btw &lt;question&gt;</code> to open a side branch here.
-                </p>
-              </div>
-            </section>
-          )}
 
           {thread.branches.length > 0 && (
             <section className="mt-5">

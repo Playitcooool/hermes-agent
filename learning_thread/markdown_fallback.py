@@ -120,3 +120,129 @@ def materialize_structured_lesson_fallback(
         return store.start(**parsed)
     except LearningThreadError:
         return store.load()
+
+
+def materialize_lesson_continuation_fallback(
+    session_id: str,
+    response_markdown: str,
+    previous_section_count: int | None = None,
+) -> dict[str, Any] | None:
+    """Append the next outlined section when a provider returned only Markdown."""
+    store = LearningThreadStore(session_id)
+    state = store.load()
+    if state is None:
+        return None
+    next_index = len(state.get("sections", []))
+    if previous_section_count is not None and next_index > previous_section_count:
+        return state
+    outline = state.get("outline", [])
+    if next_index >= len(outline):
+        return state
+
+    markdown = str(response_markdown or "").strip()
+    lines = markdown.splitlines()
+    section_index = None
+    checkpoint_index = None
+    for index, line in enumerate(lines):
+        if _SECTION_RE.match(line.strip()):
+            section_index = index
+            break
+    if section_index is None:
+        section_index = -1
+    for index in range(section_index + 1, len(lines)):
+        if _CHECKPOINT_RE.match(lines[index].strip()):
+            checkpoint_index = index
+            break
+    if checkpoint_index is None:
+        return None
+
+    content = "\n".join(lines[section_index + 1 : checkpoint_index]).strip()
+    checkpoint = "\n".join(lines[checkpoint_index + 1 :]).strip()
+    if not content or not checkpoint:
+        return None
+    try:
+        return store.continue_lesson(
+            section_title=outline[next_index]["title"],
+            content=content,
+            checkpoint=checkpoint,
+        )
+    except LearningThreadError:
+        return store.load()
+
+
+def _panel_question(control_prompt: str) -> str:
+    chunks = [chunk.strip() for chunk in str(control_prompt or "").split("\n\n")]
+    return next((chunk for chunk in reversed(chunks) if chunk), "")
+
+
+def materialize_learning_branch_fallback(
+    session_id: str,
+    control_prompt: str,
+    response_markdown: str,
+) -> dict[str, Any] | None:
+    """Record a panel question and answer when branch tool calls were omitted."""
+    store = LearningThreadStore(session_id)
+    state = store.load()
+    question = _panel_question(control_prompt)
+    answer = str(response_markdown or "").strip()
+    if state is None or not question or not answer:
+        return None
+
+    active_id = state.get("active_branch_id")
+    active = next(
+        (item for item in state.get("branches", []) if item.get("id") == active_id),
+        None,
+    )
+    question_recorded = False
+    if active:
+        messages = active.get("messages", [])
+        question_recorded = bool(
+            messages
+            and messages[-1].get("role") == "user"
+            and messages[-1].get("content") == question
+        )
+        if (
+            len(messages) >= 2
+            and messages[-2].get("role") == "user"
+            and messages[-2].get("content") == question
+            and messages[-1].get("role") == "assistant"
+        ):
+            return state
+    else:
+        section = next(
+            (
+                item
+                for item in state.get("sections", [])
+                if item.get("id") == state.get("active_section_id")
+            ),
+            None,
+        )
+        if section is None:
+            return None
+        source = str(section.get("content") or "").strip()
+        source_excerpt = source.split("\n\n", 1)[0][:500].strip()
+        if not source_excerpt:
+            return None
+
+    try:
+        if not active:
+            state = store.open_branch(
+                question=question,
+                source_excerpt=source_excerpt,
+            )
+        elif not question_recorded:
+            state = store.open_branch(question=question, source_excerpt="active branch")
+        section_title = next(
+            (
+                item.get("title")
+                for item in state.get("sections", [])
+                if item.get("id") == state.get("active_section_id")
+            ),
+            "the current lesson",
+        )
+        return store.answer_branch(
+            content=answer,
+            connection=f"This clarifies {section_title}.",
+        )
+    except LearningThreadError:
+        return store.load()

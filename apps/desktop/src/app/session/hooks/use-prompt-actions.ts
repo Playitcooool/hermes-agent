@@ -93,6 +93,7 @@ interface SubmitTextOptions {
   displayText?: string
   forceTool?: string
   fromQueue?: boolean
+  sidePanel?: boolean
 }
 
 function renderCommandsCatalog(catalog: CommandsCatalogLike): string {
@@ -247,7 +248,8 @@ export function usePromptActions({
         id: optimisticId,
         role: 'user',
         parts: [textPart(visibleText || (attachmentRefs.length ? '' : attachments.map(a => a.label).join(', ')))],
-        attachmentRefs
+        attachmentRefs,
+        hidden: options?.sidePanel
       }
 
       const releaseBusy = () => {
@@ -338,7 +340,8 @@ export function usePromptActions({
           session_id: sessionId,
           text,
           ...(options?.displayText !== undefined && { display_text: options.displayText }),
-          ...(forceTool !== undefined && { force_tool: forceTool })
+          ...(forceTool !== undefined && { force_tool: forceTool }),
+          ...(options?.sidePanel && { side_panel: true })
         })
 
         if (usingComposerAttachments) {
@@ -481,7 +484,8 @@ export function usePromptActions({
 
           await submitPromptText(submission.prompt, {
             displayText: submission.displayText,
-            forceTool: submission.forceTool
+            forceTool: submission.forceTool,
+            sidePanel: true
           })
 
           return

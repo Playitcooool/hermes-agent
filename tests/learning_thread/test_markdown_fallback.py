@@ -1,7 +1,10 @@
 from learning_thread.markdown_fallback import (
+    materialize_learning_branch_fallback,
+    materialize_lesson_continuation_fallback,
     materialize_structured_lesson_fallback,
     parse_structured_lesson_markdown,
 )
+from learning_thread.state import LearningThreadStore
 
 
 LESSON = """# Learning Thread: Python Generators
@@ -57,3 +60,109 @@ def test_materializes_missing_state_without_overwriting_it(tmp_path, monkeypatch
     assert second == first
     assert first["active_branch_id"] is None
     assert len(first["outline"]) == 5
+
+
+def test_materializes_continuation_and_branch_fallbacks(tmp_path, monkeypatch):
+    monkeypatch.setenv("HERMES_HOME", str(tmp_path))
+    first = materialize_structured_lesson_fallback(
+        "session-2",
+        "Teach me generators",
+        LESSON,
+    )
+    assert first is not None
+
+    continued = materialize_lesson_continuation_fallback(
+        "session-2",
+        """## Section 2 — Generator functions
+
+Functions pause when they yield.
+
+## Checkpoint 2
+
+What resumes a paused generator?
+""",
+    )
+    assert continued is not None
+    assert len(continued["sections"]) == 2
+    assert continued["sections"][0]["status"] == "completed"
+
+    branched = materialize_learning_branch_fallback(
+        "session-2",
+        """[Learning Thread BTW side panel]
+
+<current_lesson_section>
+Functions pause when they yield.
+</current_lesson_section>
+
+Why is pausing useful?""",
+        "It lets the function retain state between values.",
+    )
+    assert branched is not None
+    assert branched["active_branch_id"]
+    branch = branched["branches"][-1]
+    assert branch["messages"][-2]["content"] == "Why is pausing useful?"
+    assert branch["messages"][-1]["role"] == "assistant"
+
+
+def test_continuation_fallback_does_not_advance_after_tool_success(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.setenv("HERMES_HOME", str(tmp_path))
+    first = materialize_structured_lesson_fallback(
+        "session-3",
+        "Teach me generators",
+        LESSON,
+    )
+    assert first is not None
+
+    response = """## Section 2 — Generator functions
+
+Functions pause when they yield.
+
+## Checkpoint 2
+
+What resumes a paused generator?
+"""
+    tool_state = materialize_lesson_continuation_fallback(
+        "session-3",
+        response,
+        previous_section_count=1,
+    )
+    fallback_state = materialize_lesson_continuation_fallback(
+        "session-3",
+        response,
+        previous_section_count=1,
+    )
+
+    assert tool_state is not None
+    assert fallback_state is not None
+    assert len(fallback_state["sections"]) == 2
+
+
+def test_branch_fallback_does_not_duplicate_a_tool_recorded_question(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.setenv("HERMES_HOME", str(tmp_path))
+    first = materialize_structured_lesson_fallback(
+        "session-4",
+        "Teach me generators",
+        LESSON,
+    )
+    assert first is not None
+    store = LearningThreadStore("session-4")
+    store.open_branch(
+        question="Why is pausing useful?",
+        source_excerpt="A generator produces values one at a time.",
+    )
+
+    state = materialize_learning_branch_fallback(
+        "session-4",
+        "[Learning Thread BTW side panel]\n\nWhy is pausing useful?",
+        "It retains local state between values.",
+    )
+
+    assert state is not None
+    messages = state["branches"][-1]["messages"]
+    assert [message["role"] for message in messages] == ["user", "assistant"]

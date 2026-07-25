@@ -1800,6 +1800,14 @@ def _tool_summary(name: str, result: str, duration_s: float | None) -> str | Non
     return f"{text}{suffix}" if text else None
 
 
+def _turn_payload(sid: str, payload: dict) -> dict:
+    """Tag events that belong exclusively to the Learning Thread side panel."""
+    session = _sessions.get(sid)
+    if session and session.get("side_panel_turn"):
+        return {**payload, "side_panel": True}
+    return payload
+
+
 def _on_tool_start(sid: str, tool_call_id: str, name: str, args: dict):
     session = _sessions.get(sid)
     if session is not None:
@@ -1818,6 +1826,7 @@ def _on_tool_start(sid: str, tool_call_id: str, name: str, args: dict):
             "name": name,
             "context": _tool_ctx(name, args),
         }
+        payload = _turn_payload(sid, payload)
         if _session_verbose(sid):
             args_text = _tool_args_text(args)
             if args_text:
@@ -1835,6 +1844,7 @@ def _on_tool_complete(sid: str, tool_call_id: str, name: str, args: dict, result
     if session is not None:
         snapshot = session.setdefault("edit_snapshots", {}).pop(tool_call_id, None)
         started_at = session.setdefault("tool_started_at", {}).pop(tool_call_id, None)
+        payload = _turn_payload(sid, payload)
     duration_s = time.time() - started_at if started_at else None
     if duration_s is not None:
         payload["duration_s"] = duration_s
@@ -1901,7 +1911,7 @@ def _on_tool_progress(
         payload: dict[str, object] = {"text": str(preview)}
         if _session_verbose(sid):
             payload["verbose"] = True
-        _emit("reasoning.available", sid, payload)
+        _emit("reasoning.available", sid, _turn_payload(sid, payload))
         return
     if event_type.startswith("subagent."):
         payload = {
@@ -1960,7 +1970,7 @@ def _on_tool_progress(
         if preview and event_type == "subagent.tool":
             payload["tool_preview"] = str(preview)
             payload["text"] = str(preview)
-        _emit(event_type, sid, payload)
+        _emit(event_type, sid, _turn_payload(sid, payload))
 
 
 def _agent_cbs(sid: str) -> dict:
@@ -1975,12 +1985,20 @@ def _agent_cbs(sid: str) -> dict:
             sid, event_type, name, preview, args, **kwargs
         ),
         "tool_gen_callback": lambda name: _tool_progress_enabled(sid)
-        and _emit("tool.generating", sid, {"name": name}),
-        "thinking_callback": lambda text: _emit("thinking.delta", sid, {"text": text}),
+        and _emit("tool.generating", sid, _turn_payload(sid, {"name": name})),
+        "thinking_callback": lambda text: _emit(
+            "thinking.delta", sid, _turn_payload(sid, {"text": text})
+        ),
         "reasoning_callback": lambda text: _emit(
             "reasoning.delta",
             sid,
-            {"text": text, **({"verbose": True} if _session_verbose(sid) else {})},
+            _turn_payload(
+                sid,
+                {
+                    "text": text,
+                    **({"verbose": True} if _session_verbose(sid) else {}),
+                },
+            ),
         ),
         "status_callback": lambda kind, text=None: _status_update(
             sid, str(kind), None if text is None else str(text)
@@ -3997,6 +4015,9 @@ def _(rid, params: dict) -> dict:
     ):
         return _err(rid, 4004, "force_tool must be a string")
     force_tool = _prompt_force_tool(text, requested_force_tool)
+    side_panel = params.get("side_panel", False)
+    if not isinstance(side_panel, bool):
+        return _err(rid, 4004, "side_panel must be a boolean")
     truncate_user_ordinal = params.get("truncate_before_user_ordinal")
     session, err = _sess_nowait(params, rid)
     if err:
@@ -4057,6 +4078,7 @@ def _(rid, params: dict) -> dict:
             text,
             display_text=display_text,
             force_tool=force_tool,
+            side_panel=side_panel,
         )
 
     threading.Thread(target=run_after_agent_ready, daemon=True).start()
@@ -4218,6 +4240,7 @@ def _run_prompt_submit(
     *,
     display_text: str | None = None,
     force_tool: str | None = None,
+    side_panel: bool = False,
 ) -> None:
     with session["history_lock"]:
         history = list(session["history"])
@@ -4227,7 +4250,25 @@ def _run_prompt_submit(
         if not isinstance(session.get("inflight_turn"), dict):
             _start_inflight_turn(session, text)
     agent = session["agent"]
-    _emit("message.start", sid)
+    session["side_panel_turn"] = side_panel
+    learning_sections_before = None
+    if (
+        isinstance(text, str)
+        and 'learning_thread(action="continue")' in text
+    ):
+        try:
+            from learning_thread import LearningThreadStore
+
+            learning_before = LearningThreadStore(
+                session.get("session_key") or sid
+            ).load()
+            if learning_before is not None:
+                learning_sections_before = len(
+                    learning_before.get("sections", [])
+                )
+        except Exception:
+            pass
+    _emit("message.start", sid, {"side_panel": True} if side_panel else None)
 
     def run():
         approval_token = None
@@ -4346,6 +4387,8 @@ def _run_prompt_submit(
                 with session["history_lock"]:
                     _append_inflight_delta(session, delta)
                 payload = {"text": delta}
+                if side_panel:
+                    payload["side_panel"] = True
                 if streamer and (r := streamer.feed(delta)) is not None:
                     payload["rendered"] = r
                 _emit("message.delta", sid, payload)
@@ -4449,21 +4492,42 @@ def _run_prompt_submit(
                         is_explicit_learning_thread_lesson,
                     )
                     from learning_thread.markdown_fallback import (
+                        materialize_learning_branch_fallback,
+                        materialize_lesson_continuation_fallback,
                         materialize_structured_lesson_fallback,
                     )
 
+                    fallback_state = None
                     if is_explicit_learning_thread_lesson(text):
                         fallback_state = materialize_structured_lesson_fallback(
                             session.get("session_key") or sid,
                             str(text),
                             raw,
                         )
-                        if fallback_state is not None:
-                            _emit(
-                                "learning.updated",
-                                sid,
-                                {"learning_thread": fallback_state},
-                            )
+                    elif (
+                        isinstance(text, str)
+                        and 'learning_thread(action="continue")' in text
+                    ):
+                        fallback_state = materialize_lesson_continuation_fallback(
+                            session.get("session_key") or sid,
+                            raw,
+                            previous_section_count=learning_sections_before,
+                        )
+                    elif (
+                        isinstance(text, str)
+                        and "[Learning Thread BTW side panel]" in text
+                    ):
+                        fallback_state = materialize_learning_branch_fallback(
+                            session.get("session_key") or sid,
+                            text,
+                            raw,
+                        )
+                    if fallback_state is not None:
+                        _emit(
+                            "learning.updated",
+                            sid,
+                            {"learning_thread": fallback_state},
+                        )
                 except Exception as exc:
                     logger.warning(
                         "Learning Thread Markdown fallback failed for session %s: %s",
@@ -4472,6 +4536,8 @@ def _run_prompt_submit(
                     )
 
             payload = {"text": raw, "usage": _get_usage(agent), "status": status}
+            if side_panel:
+                payload["side_panel"] = True
             if last_reasoning:
                 payload["reasoning"] = last_reasoning
             if status_note:
@@ -4608,7 +4674,7 @@ def _run_prompt_submit(
             print(
                 f"[gateway-turn] {type(e).__name__}: {e}", file=sys.stderr, flush=True
             )
-            _emit("error", sid, {"message": str(e)})
+            _emit("error", sid, _turn_payload(sid, {"message": str(e)}))
         finally:
             try:
                 if approval_token is not None:
@@ -4619,6 +4685,7 @@ def _run_prompt_submit(
             with session["history_lock"]:
                 session["running"] = False
                 session["last_active"] = time.time()
+                session["side_panel_turn"] = False
                 _clear_inflight_turn(session)
             _emit("session.info", sid, _session_info(agent, session))
 

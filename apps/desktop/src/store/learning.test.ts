@@ -63,8 +63,18 @@ describe('learning thread selectors', () => {
     expect(activeLearningBranch(value)?.source_section_id).toBe('section-1')
   })
 
-  it('calculates materialized outline progress', () => {
-    expect(learningProgress(thread())).toBe(50)
+  it('counts understood or completed sections instead of merely rendered sections', () => {
+    const value = thread()
+    expect(learningProgress(value)).toBe(0)
+
+    value.sections[0].checkpoint_answer = 'Because context matters.'
+    value.sections[0].readiness = 'understood'
+    expect(learningProgress(value)).toBe(50)
+
+    value.sections[0].checkpoint_answer = null
+    value.sections[0].readiness = null
+    value.sections[0].status = 'completed'
+    expect(learningProgress(value)).toBe(50)
   })
 })
 

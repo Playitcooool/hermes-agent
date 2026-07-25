@@ -52,7 +52,7 @@ import { droppedFileInlineRef } from './composer/inline-refs'
 import type { ChatBarState } from './composer/types'
 import type { DroppedFile } from './hooks/use-composer-actions'
 import { useFileDropZone } from './hooks/use-file-drop-zone'
-import { LearningPanel } from './learning-panel'
+import { LearningMainControls, LearningPanel } from './learning-panel'
 import { SessionActionsMenu } from './sidebar/session-actions-menu'
 import { lastVisibleMessageIsUser, threadLoadingState } from './thread-loading'
 
@@ -74,7 +74,13 @@ interface ChatViewProps extends Omit<React.ComponentProps<'div'>, 'onSubmit'> {
   onRemoveAttachment: (id: string) => void
   onSubmit: (
     text: string,
-    options?: { attachments?: ComposerAttachment[]; displayText?: string; forceTool?: string; fromQueue?: boolean }
+    options?: {
+      attachments?: ComposerAttachment[]
+      displayText?: string
+      forceTool?: string
+      fromQueue?: boolean
+      sidePanel?: boolean
+    }
   ) => Promise<boolean> | boolean
   onThreadMessagesChange: (messages: readonly ThreadMessage[]) => void
   onEdit: (message: AppendMessage) => Promise<void>
@@ -347,6 +353,11 @@ export function ChatView({
               sessionKey={threadKey}
             />
             {showChatBar && (
+              <LearningMainControls
+                onPrompt={(text, displayText, forceTool) => onSubmit(text, { displayText, forceTool })}
+              />
+            )}
+            {showChatBar && (
               <Suspense fallback={<ChatBarFallback />}>
                 <ChatBar
                   busy={busy}
@@ -378,7 +389,9 @@ export function ChatView({
         </div>
         <LearningPanel
           gateway={gateway}
-          onPrompt={(text, displayText, forceTool) => onSubmit(text, { displayText, forceTool })}
+          onPrompt={(text, displayText, forceTool) =>
+            onSubmit(text, { displayText, forceTool, sidePanel: true })
+          }
           sessionId={activeSessionId}
         />
       </div>

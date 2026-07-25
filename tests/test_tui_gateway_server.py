@@ -3167,6 +3167,7 @@ def test_prompt_submit_persists_display_text_but_sends_model_instruction(monkeyp
             seen["prompt"] = prompt
             seen["persist_user_message"] = persist_user_message
             seen["force_tool"] = force_tool
+            stream_callback("branch")
             return {
                 "final_response": "branch answer",
                 "messages": [
@@ -3182,12 +3183,17 @@ def test_prompt_submit_persists_display_text_but_sends_model_instruction(monkeyp
         def start(self):
             self._target()
 
+    events = []
     server._sessions["sid"] = _session(agent=_Agent())
     try:
         monkeypatch.setattr(server.threading, "Thread", _ImmediateThread)
         monkeypatch.setattr(server, "_get_usage", lambda _a: {})
         monkeypatch.setattr(server, "render_message", lambda _t, _c: "")
-        monkeypatch.setattr(server, "_emit", lambda *_a: None)
+        monkeypatch.setattr(
+            server,
+            "_emit",
+            lambda name, sid, payload=None: events.append((name, sid, payload)),
+        )
 
         resp = server.handle_request(
             {
@@ -3198,6 +3204,7 @@ def test_prompt_submit_persists_display_text_but_sends_model_instruction(monkeyp
                     "text": "[internal branch routing]\nWhy?",
                     "display_text": "BTW · Why?",
                     "force_tool": "learning_thread",
+                    "side_panel": True,
                 },
             }
         )
@@ -3210,6 +3217,40 @@ def test_prompt_submit_persists_display_text_but_sends_model_instruction(monkeyp
             "role": "user",
             "content": "BTW · Why?",
         }
+        for event_name in ("message.start", "message.delta", "message.complete"):
+            payload = next(payload for name, _sid, payload in events if name == event_name)
+            assert payload["side_panel"] is True
+    finally:
+        server._sessions.pop("sid", None)
+
+
+def test_side_panel_turn_tags_all_stream_and_tool_events(monkeypatch):
+    events = []
+    server._sessions["sid"] = _session(agent=None)
+    server._sessions["sid"]["side_panel_turn"] = True
+    try:
+        monkeypatch.setattr(
+            server,
+            "_emit",
+            lambda name, sid, payload=None: events.append((name, sid, payload)),
+        )
+        monkeypatch.setattr(server, "_tool_progress_enabled", lambda _sid: True)
+
+        callbacks = server._agent_cbs("sid")
+        callbacks["tool_gen_callback"]("learning_thread")
+        callbacks["reasoning_callback"]("thinking")
+        server._on_tool_progress(
+            "sid",
+            "reasoning.available",
+            preview="summary",
+        )
+
+        assert [name for name, _sid, _payload in events] == [
+            "tool.generating",
+            "reasoning.delta",
+            "reasoning.available",
+        ]
+        assert all(payload["side_panel"] is True for _name, _sid, payload in events)
     finally:
         server._sessions.pop("sid", None)
 

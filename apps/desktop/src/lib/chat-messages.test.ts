@@ -11,6 +11,24 @@ import {
 } from './chat-messages'
 
 describe('toChatMessages', () => {
+  it('keeps BTW side-panel turns out of the main transcript', () => {
+    const messages = toChatMessages([
+      { role: 'user', content: 'Lesson question', timestamp: 1 },
+      { role: 'assistant', content: 'Lesson answer', timestamp: 2 },
+      { role: 'user', content: 'BTW · Why?', timestamp: 3 },
+      { role: 'assistant', content: 'Branch answer', timestamp: 4 },
+      { role: 'user', content: 'Back in the lesson', timestamp: 5 },
+      { role: 'assistant', content: 'Lesson continues', timestamp: 6 }
+    ])
+
+    expect(messages.map(chatMessageText)).toEqual([
+      'Lesson question',
+      'Lesson answer',
+      'Back in the lesson',
+      'Lesson continues'
+    ])
+  })
+
   it('keeps a turn with interleaved tool-only rows in a single bubble', () => {
     const messages = toChatMessages([
       { role: 'assistant', content: 'Planning.', timestamp: 1 },

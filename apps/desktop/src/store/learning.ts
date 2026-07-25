@@ -83,7 +83,11 @@ export function learningProgress(thread: LearningThread): number {
     return 0
   }
 
-  return Math.min(100, Math.round((thread.sections.length / thread.outline.length) * 100))
+  const completedSections = thread.sections.filter(
+    section => section.status === 'completed' || Boolean(section.checkpoint_answer && section.readiness)
+  ).length
+
+  return Math.min(100, Math.round((completedSections / thread.outline.length) * 100))
 }
 
 export function buildLearningBranchPrompt(thread: LearningThread, rawQuestion: string): string {

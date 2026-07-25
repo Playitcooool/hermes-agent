@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { HermesGateway } from '@/hermes'
 import { setLearningLoading, setLearningThread, type LearningThread } from '@/store/learning'
 
-import { LearningPanel } from './learning-panel'
+import { LearningMainControls, LearningPanel } from './learning-panel'
 
 const baseThread: LearningThread = {
   active_branch_id: null,
@@ -44,7 +44,7 @@ afterEach(() => {
 })
 
 describe('LearningPanel BTW side thread', () => {
-  it('directs new branches through /btw instead of an idle prompt', () => {
+  it('automatically creates an anchored branch from the panel input', async () => {
     const onPrompt = vi.fn().mockResolvedValue(true)
     setLearningThread(baseThread)
 
@@ -56,10 +56,27 @@ describe('LearningPanel BTW side thread', () => {
       />
     )
 
-    expect(screen.getByText(/Use/).textContent).toContain('/btw <question>')
-    expect(screen.queryByRole('button', { name: 'Open BTW panel' })).toBeNull()
-    expect(screen.queryByRole('textbox', { name: 'Ask a BTW question' })).toBeNull()
-    expect(onPrompt).not.toHaveBeenCalled()
+    const composer = screen.getByRole('textbox', { name: 'Ask a BTW question' })
+    fireEvent.change(composer, { target: { value: 'Why does this save memory?' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Start BTW thread' }))
+
+    await waitFor(() => expect(onPrompt).toHaveBeenCalledOnce())
+    expect(onPrompt.mock.calls[0][0]).toContain(baseThread.sections[0].content)
+    expect(onPrompt.mock.calls[0][1]).toBe('BTW · Why does this save memory?')
+    expect(onPrompt.mock.calls[0][2]).toBe('learning_thread')
+    expect(screen.queryByRole('button', { name: /Continue lesson/ })).toBeNull()
+  })
+
+  it('renders lesson continuation in the main chat surface', () => {
+    const onPrompt = vi.fn().mockResolvedValue(true)
+    setLearningThread(baseThread)
+
+    render(<LearningMainControls onPrompt={onPrompt} />)
+    fireEvent.click(screen.getByRole('button', { name: /Continue lesson/ }))
+
+    expect(onPrompt).toHaveBeenCalledOnce()
+    expect(onPrompt.mock.calls[0][0]).toContain('learning_thread(action="continue")')
+    expect(onPrompt.mock.calls[0][2]).toBe('learning_thread')
   })
 
   it('keeps follow-ups in the active BTW composer on Enter', async () => {

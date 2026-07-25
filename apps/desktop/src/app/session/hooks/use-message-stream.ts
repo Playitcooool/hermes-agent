@@ -737,7 +737,7 @@ export function useMessageStream({
           setTurnStartedAt(Date.now())
         }
       } else if (event.type === 'message.delta') {
-        if (sessionId) {
+        if (sessionId && !payload?.side_panel) {
           appendAssistantDelta(sessionId, coerceGatewayText(payload?.text))
         }
       } else if (event.type === 'thinking.delta') {
@@ -746,11 +746,11 @@ export function useMessageStream({
         // indicator already covers that UX, so we ignore these events to
         // avoid a duplicative "Thinking" disclosure showing spinner text.
       } else if (event.type === 'reasoning.delta') {
-        if (sessionId) {
+        if (sessionId && !payload?.side_panel) {
           appendReasoningDelta(sessionId, coerceThinkingText(payload?.text))
         }
       } else if (event.type === 'reasoning.available') {
-        if (sessionId) {
+        if (sessionId && !payload?.side_panel) {
           appendReasoningDelta(sessionId, coerceThinkingText(payload?.text), true)
         }
       } else if (event.type === 'message.complete') {
@@ -771,6 +771,32 @@ export function useMessageStream({
           triggerHaptic('streamDone')
         }
 
+        if (payload?.side_panel) {
+          updateSessionState(sessionId, state => ({
+            ...state,
+            messages: state.messages.filter(
+              message =>
+                !(message.hidden && message.role === 'user' && chatMessageText(message).startsWith('BTW ·'))
+            ),
+            streamId: null,
+            pendingBranchGroup: null,
+            awaitingResponse: false,
+            busy: false,
+            needsInput: false,
+            sawAssistantPayload: true
+          }))
+
+          if (isActiveEvent) {
+            setTurnStartedAt(null)
+          }
+          if (payload.usage) {
+            setCurrentUsage(current => ({ ...current, ...payload.usage }))
+          }
+          void refreshSessions().catch(() => undefined)
+
+          return
+        }
+
         const finalText = coerceGatewayText(payload?.text) || coerceGatewayText(payload?.rendered)
         completeAssistantMessage(sessionId, finalText)
 
@@ -782,14 +808,14 @@ export function useMessageStream({
           setCurrentUsage(current => ({ ...current, ...payload.usage }))
         }
       } else if (event.type === 'tool.start' || event.type === 'tool.progress' || event.type === 'tool.generating') {
-        if (!sessionId) {
+        if (!sessionId || payload?.side_panel) {
           return
         }
 
         flushQueuedDeltas(sessionId)
         upsertToolCall(sessionId, toTodoPayload(payload) ?? payload, 'running', event.type)
       } else if (event.type === 'tool.complete') {
-        if (sessionId) {
+        if (sessionId && !payload?.side_panel) {
           flushQueuedDeltas(sessionId)
           upsertToolCall(sessionId, toTodoPayload(payload) ?? payload, 'complete', event.type)
           // A pending clarify blocks the turn, so the first tool.complete after
@@ -913,7 +939,23 @@ export function useMessageStream({
 
         if (sessionId) {
           flushQueuedDeltas(sessionId)
-          failAssistantMessage(sessionId, errorMessage)
+          if (payload?.side_panel) {
+            updateSessionState(sessionId, state => ({
+              ...state,
+              messages: state.messages.filter(
+                message =>
+                  !(message.hidden && message.role === 'user' && chatMessageText(message).startsWith('BTW ·'))
+              ),
+              streamId: null,
+              pendingBranchGroup: null,
+              awaitingResponse: false,
+              busy: false,
+              needsInput: false,
+              sawAssistantPayload: true
+            }))
+          } else {
+            failAssistantMessage(sessionId, errorMessage)
+          }
         }
 
         if (isActiveEvent) {

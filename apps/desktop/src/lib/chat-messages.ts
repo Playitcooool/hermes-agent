@@ -52,6 +52,7 @@ export type GatewayEventPayload = {
   personality?: string
   usage?: Partial<UsageStats>
   learning_thread?: unknown
+  side_panel?: boolean
   // clarify.request
   request_id?: string
   question?: string
@@ -707,7 +708,16 @@ export function toChatMessages(messages: SessionMessage[]): ChatMessage[] {
     clearPendingTools()
   }
 
+  let sidePanelTurn = false
+
   messages.forEach((message, index) => {
+    if (message.role === 'user') {
+      sidePanelTurn = typeof message.content === 'string' && message.content.startsWith('BTW ·')
+    }
+    if (sidePanelTurn) {
+      return
+    }
+
     if (message.role === 'tool') {
       const updatedPendingToolParts = applyStoredToolResultToParts(pendingToolParts, message)
 
