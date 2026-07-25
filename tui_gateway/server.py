@@ -1856,6 +1856,14 @@ def _on_tool_complete(sid: str, tool_call_id: str, name: str, args: dict, result
                 payload["todos"] = data.get("todos")
         except Exception:
             pass
+    if name == "learning_thread" and isinstance(payload.get("result"), dict):
+        learning_result = payload["result"]
+        if learning_result.get("success") and "learning_thread" in learning_result:
+            _emit(
+                "learning.updated",
+                sid,
+                {"learning_thread": learning_result.get("learning_thread")},
+            )
     try:
         from agent.display import render_edit_diff_with_delta
 
@@ -3351,6 +3359,50 @@ def _(rid, params: dict) -> dict:
         ]
     )
     return _ok(rid, {"output": "\n".join(lines)})
+
+
+@method("learning.get")
+def _(rid, params: dict) -> dict:
+    session, err = _sess_nowait(params, rid)
+    if err:
+        return err
+    from learning_thread import LearningThreadStore
+
+    key = session.get("session_key") or params.get("session_id") or ""
+    return _ok(rid, {"thread": LearningThreadStore(key).load()})
+
+
+@method("learning.back")
+def _(rid, params: dict) -> dict:
+    session, err = _sess_nowait(params, rid)
+    if err:
+        return err
+    if session.get("running"):
+        return _err(rid, 4091, "wait for the current response before returning to the lesson")
+    from learning_thread import LearningThreadError, LearningThreadStore
+
+    key = session.get("session_key") or params.get("session_id") or ""
+    try:
+        state = LearningThreadStore(key).back(resolution=params.get("resolution"))
+    except LearningThreadError as exc:
+        return _err(rid, 4092, str(exc))
+    _emit("learning.updated", params.get("session_id") or "", {"learning_thread": state})
+    return _ok(rid, {"thread": state})
+
+
+@method("learning.reset")
+def _(rid, params: dict) -> dict:
+    session, err = _sess_nowait(params, rid)
+    if err:
+        return err
+    if session.get("running"):
+        return _err(rid, 4091, "wait for the current response before resetting the lesson")
+    from learning_thread import LearningThreadStore
+
+    key = session.get("session_key") or params.get("session_id") or ""
+    LearningThreadStore(key).reset()
+    _emit("learning.updated", params.get("session_id") or "", {"learning_thread": None})
+    return _ok(rid, {"thread": None})
 
 
 @method("session.history")

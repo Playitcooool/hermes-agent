@@ -2609,6 +2609,55 @@ def test_session_status_reads_live_gateway_agent(monkeypatch):
     assert "Agent Running: Yes" in out
 
 
+def test_learning_rpc_reads_and_returns_from_anchored_branch(monkeypatch):
+    from learning_thread import LearningThreadStore
+
+    server._sessions["sid"] = _session()
+    store = LearningThreadStore("session-key")
+    store.start(
+        topic="Attention",
+        objective="Understand scaling",
+        outline=[{"title": "Scaling", "purpose": "Explain stable logits"}],
+        section_title="Scaling",
+        content="Dot products grow with dimension.",
+        checkpoint="What happens without scaling?",
+    )
+    opened = store.open_branch(question="Why square root?", source_excerpt="divide by sqrt(d_k)")
+    events = []
+    monkeypatch.setattr(server, "_emit", lambda *args: events.append(args))
+    try:
+        fetched = server.handle_request(
+            {"id": "1", "method": "learning.get", "params": {"session_id": "sid"}}
+        )
+        returned = server.handle_request(
+            {
+                "id": "2",
+                "method": "learning.back",
+                "params": {"session_id": "sid", "resolution": "It stabilizes variance."},
+            }
+        )
+    finally:
+        server._sessions.pop("sid", None)
+
+    assert fetched["result"]["thread"]["active_branch_id"] == opened["active_branch_id"]
+    assert returned["result"]["thread"]["active_branch_id"] is None
+    assert returned["result"]["thread"]["active_section_id"] == opened["active_section_id"]
+    assert events[-1][0] == "learning.updated"
+
+
+def test_learning_tool_completion_always_emits_structured_update(monkeypatch):
+    events = []
+    monkeypatch.setattr(server, "_emit", lambda *args: events.append(args))
+    server._sessions["sid"] = _session(tool_progress_mode="off")
+    result = json.dumps({"success": True, "learning_thread": {"id": "thread-1"}})
+    try:
+        server._on_tool_complete("sid", "tool-1", "learning_thread", {}, result)
+    finally:
+        server._sessions.pop("sid", None)
+
+    assert ("learning.updated", "sid", {"learning_thread": {"id": "thread-1"}}) in events
+
+
 def test_skills_reload_runs_in_gateway_process(monkeypatch):
     import agent.skill_commands as skill_commands
 
