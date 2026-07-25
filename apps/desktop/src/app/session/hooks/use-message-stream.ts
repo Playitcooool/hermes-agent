@@ -17,6 +17,7 @@ import { coerceGatewayText, coerceThinkingText, normalizePersonalityValue } from
 import { triggerHaptic } from '@/lib/haptics'
 import { isProviderSetupErrorMessage } from '@/lib/provider-setup-errors'
 import { setClarifyRequest } from '@/store/clarify'
+import { type LearningThread, setLearningThread } from '@/store/learning'
 import { notify } from '@/store/notifications'
 import { requestDesktopOnboarding } from '@/store/onboarding'
 import { clearAllPrompts, setApprovalRequest, setSecretRequest, setSudoRequest } from '@/store/prompts'
@@ -326,10 +327,7 @@ export function useMessageStream({
       return
     }
 
-    flushHandleRef.current = window.setTimeout(
-      runFlush,
-      Math.max(0, STREAM_DELTA_FLUSH_MS - sinceLast)
-    )
+    flushHandleRef.current = window.setTimeout(runFlush, Math.max(0, STREAM_DELTA_FLUSH_MS - sinceLast))
   }, [flushQueuedDeltas])
 
   const queueDelta = useCallback(
@@ -708,6 +706,11 @@ export function useMessageStream({
           void queryClient.invalidateQueries({
             queryKey: explicitSid && sessionId ? ['model-options', sessionId] : ['model-options']
           })
+        }
+      } else if (event.type === 'learning.updated') {
+        if (isActiveEvent) {
+          const thread = payload?.learning_thread
+          setLearningThread(thread && typeof thread === 'object' ? (thread as LearningThread) : null)
         }
       } else if (event.type === 'message.start') {
         if (!sessionId) {

@@ -51,6 +51,7 @@ export type GatewayEventPayload = {
   credential_warning?: string
   personality?: string
   usage?: Partial<UsageStats>
+  learning_thread?: unknown
   // clarify.request
   request_id?: string
   question?: string

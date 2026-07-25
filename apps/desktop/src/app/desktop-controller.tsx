@@ -27,6 +27,7 @@ import {
   SIDEBAR_MAX_WIDTH,
   unpinSession
 } from '../store/layout'
+import { type LearningThread, setLearningLoading, setLearningThread } from '../store/learning'
 import { $filePreviewTarget, $previewTarget, closeActiveRightRailTab } from '../store/preview'
 import {
   $activeSessionId,
@@ -531,6 +532,41 @@ export function DesktopController() {
       void refreshSessions().catch(() => undefined)
     }
   }, [gatewayState, refreshCurrentModel, refreshSessions])
+
+  useEffect(() => {
+    let cancelled = false
+
+    if (gatewayState !== 'open' || !activeSessionId) {
+      setLearningThread(null)
+      setLearningLoading(false)
+
+      return () => {
+        cancelled = true
+      }
+    }
+
+    setLearningLoading(true)
+    void requestGateway<{ thread: LearningThread | null }>('learning.get', { session_id: activeSessionId })
+      .then(result => {
+        if (!cancelled) {
+          setLearningThread(result.thread)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setLearningThread(null)
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLearningLoading(false)
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [activeSessionId, gatewayState, requestGateway])
 
   useRouteResume({
     activeSessionId,

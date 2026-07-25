@@ -271,7 +271,7 @@ function Header() {
           <Sparkles className="size-5" />
         </div>
         <div>
-          <h2 className="text-[0.9375rem] font-semibold tracking-tight">Let's get you setup with Hermes Agent</h2>
+          <h2 className="text-[0.9375rem] font-semibold tracking-tight">Set up Learning Thread with Hermes Agent</h2>
           <p className="mt-1 max-w-xl text-[0.8125rem] leading-5 text-(--ui-text-tertiary)">
             Connect a model provider to start chatting. Most options take one click.
           </p>
@@ -584,7 +584,9 @@ export function ApiKeyForm({
           className="font-mono"
           onChange={e => setValue(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && void submit()}
-          placeholder={currentRedacted ?? (alreadySet ? 'Replace current value' : option.placeholder || 'Paste API key')}
+          placeholder={
+            currentRedacted ?? (alreadySet ? 'Replace current value' : option.placeholder || 'Paste API key')
+          }
           type={isLocal ? 'text' : 'password'}
           value={value}
         />
@@ -676,8 +678,8 @@ function FlowPanel({ ctx, flow }: { ctx: OnboardingContext; flow: OnboardingFlow
     return (
       <Step title={`Sign in with ${title}`}>
         <p className="text-sm text-muted-foreground">
-          We opened {title} in your browser. Authorize Hermes there and you'll be connected
-          automatically — nothing to copy or paste.
+          We opened {title} in your browser. Authorize Hermes there and you'll be connected automatically — nothing to
+          copy or paste.
         </p>
         <FlowFooter left={<DocsLink href={flow.start.auth_url}>Re-open sign-in page</DocsLink>}>
           <span className="flex items-center gap-2 text-xs text-muted-foreground">

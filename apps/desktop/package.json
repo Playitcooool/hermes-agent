@@ -1,9 +1,9 @@
 {
-  "name": "hermes",
-  "productName": "Hermes",
+  "name": "learning-thread-desktop",
+  "productName": "Learning Thread",
   "private": true,
-  "version": "0.15.1",
-  "description": "Native desktop shell for Hermes Agent.",
+  "version": "0.1.0",
+  "description": "A structured learning workspace powered by Hermes Agent.",
   "author": "Nous Research",
   "type": "module",
   "main": "electron/main.cjs",
@@ -130,10 +130,10 @@
   },
   "build": {
     "electronVersion": "40.9.3",
-    "appId": "com.nousresearch.hermes",
-    "productName": "Hermes",
-    "executableName": "Hermes",
-    "artifactName": "Hermes-${version}-${os}-${arch}.${ext}",
+    "appId": "works.earendil.learning-thread",
+    "productName": "Learning Thread",
+    "executableName": "LearningThread",
+    "artifactName": "LearningThread-${version}-${os}-${arch}.${ext}",
     "icon": "assets/icon",
     "directories": {
       "output": "release"
@@ -218,7 +218,7 @@
     "linux": {
       "category": "Development",
       "maintainer": "Nous Research <support@nousresearch.com>",
-      "synopsis": "Native desktop shell for Hermes Agent.",
+      "synopsis": "A structured learning workspace powered by Hermes Agent.",
       "target": [
         "AppImage",
         "deb",

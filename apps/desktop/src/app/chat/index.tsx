@@ -52,6 +52,7 @@ import { droppedFileInlineRef } from './composer/inline-refs'
 import type { ChatBarState } from './composer/types'
 import type { DroppedFile } from './hooks/use-composer-actions'
 import { useFileDropZone } from './hooks/use-file-drop-zone'
+import { LearningPanel } from './learning-panel'
 import { SessionActionsMenu } from './sidebar/session-actions-menu'
 import { lastVisibleMessageIsUser, threadLoadingState } from './thread-loading'
 
@@ -328,51 +329,64 @@ export function ChatView({
       <NotificationStack />
       <PromptOverlays />
 
-      <div
-        className="relative min-h-0 max-w-full flex-1 overflow-hidden bg-(--ui-chat-surface-background) contain-[layout_paint]"
-        {...dropHandlers}
-      >
-        <AssistantRuntimeProvider runtime={runtime}>
-          <Thread
-            clampToComposer={showChatBar}
-            cwd={currentCwd}
-            gateway={gateway}
-            intro={showIntro ? { personality: introPersonality, seed: introSeed } : undefined}
-            loading={threadLoading}
-            onBranchInNewChat={onBranchInNewChat}
-            onCancel={onCancel}
-            sessionId={activeSessionId}
-            sessionKey={threadKey}
-          />
-          {showChatBar && (
-            <Suspense fallback={<ChatBarFallback />}>
-              <ChatBar
-                busy={busy}
-                cwd={currentCwd}
-                disabled={!gatewayOpen}
-                focusKey={activeSessionId}
-                gateway={gateway}
-                maxRecordingSeconds={maxVoiceRecordingSeconds}
-                onAddContextRef={onAddContextRef}
-                onAddUrl={onAddUrl}
-                onAttachDroppedItems={onAttachDroppedItems}
-                onAttachImageBlob={onAttachImageBlob}
-                onCancel={onCancel}
-                onPasteClipboardImage={onPasteClipboardImage}
-                onPickFiles={onPickFiles}
-                onPickFolders={onPickFolders}
-                onPickImages={onPickImages}
-                onRemoveAttachment={onRemoveAttachment}
-                onSubmit={onSubmit}
-                onTranscribeAudio={onTranscribeAudio}
-                queueSessionKey={selectedSessionId || activeSessionId}
-                sessionId={activeSessionId}
-                state={chatBarState}
-              />
-            </Suspense>
-          )}
-        </AssistantRuntimeProvider>
-        <ChatDropOverlay active={dragActive} />
+      <div className="relative flex min-h-0 max-w-full flex-1 overflow-hidden contain-[layout_paint]">
+        <div
+          className="relative min-h-0 min-w-0 flex-1 overflow-hidden bg-(--ui-chat-surface-background)"
+          {...dropHandlers}
+        >
+          <AssistantRuntimeProvider runtime={runtime}>
+            <Thread
+              clampToComposer={showChatBar}
+              cwd={currentCwd}
+              gateway={gateway}
+              intro={showIntro ? { personality: introPersonality, seed: introSeed } : undefined}
+              loading={threadLoading}
+              onBranchInNewChat={onBranchInNewChat}
+              onCancel={onCancel}
+              sessionId={activeSessionId}
+              sessionKey={threadKey}
+            />
+            {showChatBar && (
+              <Suspense fallback={<ChatBarFallback />}>
+                <ChatBar
+                  busy={busy}
+                  cwd={currentCwd}
+                  disabled={!gatewayOpen}
+                  focusKey={activeSessionId}
+                  gateway={gateway}
+                  maxRecordingSeconds={maxVoiceRecordingSeconds}
+                  onAddContextRef={onAddContextRef}
+                  onAddUrl={onAddUrl}
+                  onAttachDroppedItems={onAttachDroppedItems}
+                  onAttachImageBlob={onAttachImageBlob}
+                  onCancel={onCancel}
+                  onPasteClipboardImage={onPasteClipboardImage}
+                  onPickFiles={onPickFiles}
+                  onPickFolders={onPickFolders}
+                  onPickImages={onPickImages}
+                  onRemoveAttachment={onRemoveAttachment}
+                  onSubmit={onSubmit}
+                  onTranscribeAudio={onTranscribeAudio}
+                  queueSessionKey={selectedSessionId || activeSessionId}
+                  sessionId={activeSessionId}
+                  state={chatBarState}
+                />
+              </Suspense>
+            )}
+          </AssistantRuntimeProvider>
+          <ChatDropOverlay active={dragActive} />
+        </div>
+        <LearningPanel
+          gateway={gateway}
+          onPrompt={text => {
+            if (text.startsWith('By the way')) {
+              requestComposerInsert(text, { mode: 'inline', target: 'main' })
+            } else {
+              void onSubmit(text)
+            }
+          }}
+          sessionId={activeSessionId}
+        />
       </div>
     </div>
   )
