@@ -312,6 +312,7 @@ def test_build_api_kwargs_codex_can_force_one_tool_for_the_next_call(monkeypatch
     )
 
     assert kwargs["tool_choice"] == {"type": "function", "name": "terminal"}
+    assert [tool["name"] for tool in kwargs["tools"]] == ["terminal"]
     assert agent._ephemeral_tool_choice is None
 
 

@@ -569,6 +569,17 @@ def build_api_kwargs(agent, api_messages: list) -> dict:
         _ct = agent._get_transport()
         forced_tool = getattr(agent, "_ephemeral_tool_choice", None)
         agent._ephemeral_tool_choice = None
+        if forced_tool:
+            forced_tools = [
+                tool
+                for tool in tools_for_api
+                if tool.get("function", {}).get("name") == forced_tool
+            ]
+            if forced_tools:
+                # Some Responses-compatible backends treat a named
+                # ``tool_choice`` as advisory. Restrict this first request to
+                # the selected schema so another tool cannot be substituted.
+                tools_for_api = forced_tools
         is_github_responses = (
             base_url_host_matches(agent.base_url, "models.github.ai")
             or base_url_host_matches(agent.base_url, "api.githubcopilot.com")
