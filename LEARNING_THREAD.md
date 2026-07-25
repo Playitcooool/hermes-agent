@@ -12,8 +12,9 @@ npm run dev
 ```
 
 On first launch choose **OpenAI OAuth (ChatGPT)**. Authentication and token refresh stay in the
-Hermes backend; the React renderer never reads OAuth credentials. Existing Hermes credentials under
-`HERMES_HOME` can be reused. For isolated development, launch with a separate profile directory:
+Hermes backend; the React renderer never reads OAuth credentials. Packaged builds use
+`~/.learning-thread` (or `%LOCALAPPDATA%/learning-thread`) so they cannot overwrite a normal Hermes
+installation. For isolated development, launch with an explicit profile directory:
 
 ```bash
 HERMES_HOME=/tmp/learning-thread-dev npm run dev
@@ -41,6 +42,8 @@ The `learning_thread` tool owns the durable state machine:
 - Branch follow-ups cannot advance the canonical lesson.
 - **Return to lesson** restores the exact section recorded by the branch.
 - State is stored per Hermes session under `HERMES_HOME/learning_threads/`.
+- Packaged first-launch bootstrap clones the `learning-thread-app` branch from this fork, so the GUI
+  and Python learning runtime always use the same committed version.
 
 The desktop receives `learning.updated` gateway events and displays a study panel with outline
 progress, active checkpoint readiness, question branches, note export, and direct return controls.
