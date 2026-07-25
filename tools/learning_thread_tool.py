@@ -15,7 +15,11 @@ _SCHEMA = {
         "Maintain a persistent structured lesson. Call action=start only when the user explicitly asks "
         "for sustained teaching (for example 'teach me' or 'I want to understand'). Ordinary questions "
         "and tasks must receive ordinary answers. Side questions use branch_open/branch_answer and never "
-        "advance the canonical lesson."
+        "advance the canonical lesson. Action requirements: start needs topic, objective, a 5–7 item outline, "
+        "the first section's Markdown content, and one checkpoint; continue teaches exactly the next outline "
+        "section; checkpoint records and evaluates the learner's answer; branch_open anchors a side question "
+        "to source_excerpt; branch_answer gives a focused answer and connection; back restores the source "
+        "section. After a successful state-changing call, do not repeat display_markdown in ordinary prose."
     ),
     "parameters": {
         "type": "object",

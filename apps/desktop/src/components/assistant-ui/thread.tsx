@@ -295,6 +295,43 @@ const ResponseLoadingIndicator: FC = () => {
   )
 }
 
+const LearningThreadTool: FC<ToolCallMessagePartProps> = ({ result }) => {
+  if (result === undefined) {
+    return (
+      <StatusRow label="Updating learning thread">
+        <span aria-hidden="true" className="dither inline-block size-3 rounded-[2px] animate-pulse" />
+        Structuring the lesson…
+      </StatusRow>
+    )
+  }
+
+  let value = result
+
+  if (typeof value === 'string') {
+    try {
+      value = JSON.parse(value)
+    } catch {
+      return null
+    }
+  }
+
+  if (!value || typeof value !== 'object') {
+    return null
+  }
+
+  const markdown = (value as { display_markdown?: unknown }).display_markdown
+
+  if (typeof markdown !== 'string' || !markdown.trim()) {
+    return null
+  }
+
+  return (
+    <div className="my-2 rounded-xl border border-primary/25 bg-card/70 px-4 py-3 shadow-sm">
+      <MarkdownTextContent isRunning={false} text={markdown} />
+    </div>
+  )
+}
+
 const ImageGenerateTool: FC<ToolCallMessagePartProps> = ({ result }) => {
   const generatedImage = useGeneratedImageContext()
   const running = result === undefined
@@ -322,6 +359,10 @@ const ChainToolFallback: FC<ToolCallMessagePartProps> = props => {
 
   if (props.toolName === 'image_generate') {
     return <ImageGenerateTool {...props} />
+  }
+
+  if (props.toolName === 'learning_thread') {
+    return <LearningThreadTool {...props} />
   }
 
   if (props.toolName === 'clarify') {
