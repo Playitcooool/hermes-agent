@@ -172,11 +172,11 @@
       "entitlements": "electron/entitlements.mac.plist",
       "entitlementsInherit": "electron/entitlements.mac.inherit.plist",
       "extendInfo": {
-        "CFBundleDisplayName": "Hermes",
-        "CFBundleExecutable": "Hermes",
-        "CFBundleName": "Hermes",
-        "NSAudioCaptureUsageDescription": "Hermes uses audio capture for voice conversations.",
-        "NSMicrophoneUsageDescription": "Hermes uses the microphone for voice input and voice conversations."
+        "CFBundleDisplayName": "Learning Thread",
+        "CFBundleExecutable": "LearningThread",
+        "CFBundleName": "Learning Thread",
+        "NSAudioCaptureUsageDescription": "Learning Thread uses audio capture for voice conversations.",
+        "NSMicrophoneUsageDescription": "Learning Thread uses the microphone for voice input and voice conversations."
       },
       "gatekeeperAssess": false,
       "hardenedRuntime": true,
@@ -186,7 +186,7 @@
       ]
     },
     "dmg": {
-      "title": "Install Hermes",
+      "title": "Install Learning Thread",
       "backgroundColor": "#f5f5f7",
       "iconSize": 96,
       "window": {
@@ -208,7 +208,7 @@
       ]
     },
     "win": {
-      "legalTrademarks": "Hermes",
+      "legalTrademarks": "Learning Thread",
       "target": [
         "nsis",
         "msi"
@@ -229,8 +229,8 @@
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "perMachine": false,
-      "shortcutName": "Hermes",
-      "uninstallDisplayName": "Hermes",
+      "shortcutName": "Learning Thread",
+      "uninstallDisplayName": "Learning Thread",
       "warningsAsErrors": false
     }
   }
