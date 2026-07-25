@@ -1,9 +1,10 @@
 import { useStore } from '@nanostores/react'
-import { useEffect, useMemo, useState } from 'react'
+import { type FormEvent, type KeyboardEvent, useEffect, useState } from 'react'
 
 import { CompactMarkdown } from '@/components/chat/compact-markdown'
 import { Button } from '@/components/ui/button'
 import { Codicon } from '@/components/ui/codicon'
+import { Textarea } from '@/components/ui/textarea'
 import type { HermesGateway } from '@/hermes'
 import {
   $learningLoading,
@@ -18,7 +19,7 @@ import {
 
 interface LearningPanelProps {
   gateway: HermesGateway | null
-  onPrompt: (text: string) => void
+  onPrompt: (text: string, displayText?: string) => Promise<boolean> | boolean
   sessionId: null | string
 }
 
@@ -57,6 +58,9 @@ export function LearningPanel({ gateway, onPrompt, sessionId }: LearningPanelPro
   const loading = useStore($learningLoading)
   const [expanded, setExpanded] = useState(true)
   const [selectedBranchId, setSelectedBranchId] = useState<null | string>(null)
+  const [branchComposerOpen, setBranchComposerOpen] = useState(false)
+  const [branchDraft, setBranchDraft] = useState('')
+  const [branchSubmitting, setBranchSubmitting] = useState(false)
   const section = thread ? activeLearningSection(thread) : null
   const activeBranch = thread ? activeLearningBranch(thread) : null
   const branch = thread?.branches.find(item => item.id === (activeBranch?.id ?? selectedBranchId)) ?? null
@@ -64,16 +68,8 @@ export function LearningPanel({ gateway, onPrompt, sessionId }: LearningPanelPro
 
   useEffect(() => {
     setSelectedBranchId(thread?.active_branch_id ?? null)
+    setBranchComposerOpen(Boolean(thread?.active_branch_id))
   }, [thread?.active_branch_id, thread?.id])
-
-  const branchAnswer = useMemo(
-    () =>
-      branch?.messages
-        .filter(message => message.role === 'assistant')
-        .map(message => message.content)
-        .join('\n\n') || '',
-    [branch]
-  )
 
   if (!thread) {
     return null
@@ -89,8 +85,61 @@ export function LearningPanel({ gateway, onPrompt, sessionId }: LearningPanelPro
     try {
       const result = await gateway.request<{ thread: LearningThread }>('learning.back', { session_id: sessionId })
       setLearningThread(result.thread)
+      setBranchComposerOpen(false)
+      setBranchDraft('')
     } finally {
       setLearningLoading(false)
+    }
+  }
+
+  const submitBranchQuestion = async (event?: FormEvent) => {
+    event?.preventDefault()
+    const question = branchDraft.trim()
+    const sourceContent = section?.content.trim() || section?.title || ''
+
+    if (!question || branchSubmitting || loading) {
+      return
+    }
+
+    const instruction = activeBranch
+      ? [
+          '[Learning Thread BTW side panel]',
+          'Record the following follow-up in the active side branch with learning_thread(action="branch_open"),',
+          'then answer it with learning_thread(action="branch_answer"). Do not advance or rewrite the canonical lesson.',
+          '',
+          question
+        ].join('\n')
+      : [
+          '[Learning Thread BTW side panel]',
+          'Open a durable side branch for the following question. Select the relevant exact words from the supplied',
+          'current lesson section and pass them verbatim as source_excerpt to',
+          'learning_thread(action="branch_open"), then answer with learning_thread(action="branch_answer").',
+          'Do not advance or rewrite the canonical lesson.',
+          '',
+          '<current_lesson_section>',
+          sourceContent,
+          '</current_lesson_section>',
+          '',
+          question
+        ].join('\n')
+
+    setBranchSubmitting(true)
+
+    try {
+      const submitted = await onPrompt(instruction, `BTW · ${question}`)
+
+      if (submitted) {
+        setBranchDraft('')
+      }
+    } finally {
+      setBranchSubmitting(false)
+    }
+  }
+
+  const handleBranchKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault()
+      void submitBranchQuestion()
     }
   }
 
@@ -115,7 +164,9 @@ export function LearningPanel({ gateway, onPrompt, sessionId }: LearningPanelPro
 
   return (
     <aside
-      className={`relative z-2 flex shrink-0 flex-col border-l border-border/70 bg-card/85 backdrop-blur-xl transition-[width] ${expanded ? 'w-[19rem]' : 'w-12'}`}
+      className={`relative z-2 flex shrink-0 flex-col border-l border-border/70 bg-card/85 backdrop-blur-xl transition-[width] ${
+        expanded ? (branch || branchComposerOpen ? 'w-[24rem]' : 'w-[19rem]') : 'w-12'
+      }`}
     >
       <header className="flex items-start gap-2 border-b border-border/60 px-2.5 py-3">
         {expanded && (
@@ -176,28 +227,99 @@ export function LearningPanel({ gateway, onPrompt, sessionId }: LearningPanelPro
             })}
           </ol>
 
-          {branch ? (
+          {branch || branchComposerOpen ? (
             <section className="mt-5 rounded-lg border border-warning/40 bg-warning/5 p-3">
-              <div className="font-mondwest text-xs text-display text-warning">Side question</div>
-              <h3 className="mt-1 text-sm font-medium text-text-primary">{branch.title}</h3>
-              <blockquote className="mt-2 border-l-2 border-warning/50 pl-2 text-xs text-text-secondary">
-                {branch.source_excerpt}
-              </blockquote>
-              {branchAnswer && <CompactMarkdown className="mt-3" text={branchAnswer} />}
-              {branch.connection && (
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <div className="font-mondwest text-xs text-display text-warning">BTW thread</div>
+                  <h3 className="mt-1 text-sm font-medium text-text-primary">
+                    {branch?.title ?? 'Ask without leaving the lesson'}
+                  </h3>
+                </div>
+                {!activeBranch && (
+                  <Button
+                    aria-label="Close BTW panel"
+                    className="size-7 p-0"
+                    onClick={() => {
+                      setBranchComposerOpen(false)
+                      setSelectedBranchId(null)
+                    }}
+                    size="icon"
+                    variant="ghost"
+                  >
+                    <Codicon name="close" />
+                  </Button>
+                )}
+              </div>
+
+              {branch?.source_excerpt && (
+                <blockquote className="mt-2 border-l-2 border-warning/50 pl-2 text-xs text-text-secondary">
+                  {branch.source_excerpt}
+                </blockquote>
+              )}
+
+              {branch && (
+                <div aria-label="BTW conversation" className="mt-3 space-y-2">
+                  {branch.messages.map((message, index) =>
+                    message.role === 'assistant' ? (
+                      <div className="rounded-md bg-background/70 p-2.5" key={`${message.at}-${index}`}>
+                        <CompactMarkdown text={message.content} />
+                      </div>
+                    ) : (
+                      <p
+                        className="ml-5 rounded-md bg-warning/10 px-2.5 py-2 text-xs leading-relaxed text-text-primary"
+                        key={`${message.at}-${index}`}
+                      >
+                        {message.content}
+                      </p>
+                    )
+                  )}
+                </div>
+              )}
+
+              {branch?.connection && (
                 <p className="mt-3 text-xs leading-relaxed text-text-secondary">
-                  <strong>Connection:</strong> {branch.connection}
+                  <strong>Connection:</strong> {branch?.connection}
                 </p>
               )}
-              {activeBranch?.id === branch.id ? (
-                <Button className="mt-3 w-full" disabled={loading} onClick={() => void returnToLesson()} size="sm">
-                  <Codicon name="arrow-left" /> Return to lesson
+
+              {(activeBranch || !branch) && (
+                <form className="mt-3 space-y-2" onSubmit={event => void submitBranchQuestion(event)}>
+                  <Textarea
+                    aria-label={activeBranch ? 'Follow up in BTW thread' : 'Ask a BTW question'}
+                    disabled={branchSubmitting || loading}
+                    onChange={event => setBranchDraft(event.target.value)}
+                    onKeyDown={handleBranchKeyDown}
+                    placeholder={activeBranch ? 'Follow up here…' : 'Ask a side question…'}
+                    rows={3}
+                    value={branchDraft}
+                  />
+                  <Button
+                    className="w-full"
+                    disabled={!branchDraft.trim() || branchSubmitting || loading}
+                    size="sm"
+                    type="submit"
+                  >
+                    <Codicon name="send" /> {activeBranch ? 'Send follow-up' : 'Start BTW thread'}
+                  </Button>
+                </form>
+              )}
+
+              {activeBranch ? (
+                <Button
+                  className="mt-2 w-full"
+                  disabled={loading || branchSubmitting}
+                  onClick={() => void returnToLesson()}
+                  size="sm"
+                  variant="outline"
+                >
+                  <Codicon name="arrow-left" /> Back to lesson
                 </Button>
-              ) : (
+              ) : branch ? (
                 <Button className="mt-3 w-full" onClick={() => setSelectedBranchId(null)} size="sm" variant="outline">
                   <Codicon name="arrow-left" /> Current section
                 </Button>
-              )}
+              ) : null}
             </section>
           ) : (
             <section className="mt-5 rounded-lg border border-border/60 bg-background/50 p-3">
@@ -207,11 +329,25 @@ export function LearningPanel({ gateway, onPrompt, sessionId }: LearningPanelPro
                 <div className="mt-2 text-xs text-text-secondary">{readinessLabels[section.readiness]}</div>
               )}
               <div className="mt-3 grid grid-cols-1 gap-2">
-                <Button onClick={() => onPrompt('Continue the lesson with the next outlined section.')} size="sm">
+                <Button
+                  onClick={() =>
+                    void onPrompt(
+                      'Continue the durable Learning Thread with the next outlined section. You MUST use learning_thread(action="continue").'
+                    )
+                  }
+                  size="sm"
+                >
                   Continue lesson <Codicon name="arrow-right" />
                 </Button>
-                <Button onClick={() => onPrompt('By the way, ')} size="sm" variant="outline">
-                  <Codicon name="git-branch" /> Ask a side question
+                <Button
+                  onClick={() => {
+                    setSelectedBranchId(null)
+                    setBranchComposerOpen(true)
+                  }}
+                  size="sm"
+                  variant="outline"
+                >
+                  <Codicon name="git-branch" /> Open BTW panel
                 </Button>
               </div>
             </section>

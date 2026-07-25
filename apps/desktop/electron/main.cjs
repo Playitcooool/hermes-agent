@@ -219,7 +219,7 @@ const BOOT_FAKE_STEP_MS = (() => {
   if (!Number.isFinite(raw) || raw <= 0) return 650
   return Math.max(120, raw)
 })()
-const APP_NAME = 'Hermes'
+const APP_NAME = 'Learning Thread'
 const TITLEBAR_HEIGHT = 34
 const MACOS_TRAFFIC_LIGHTS_HEIGHT = 14
 const WINDOW_BUTTON_POSITION = {
@@ -1442,13 +1442,20 @@ async function applyUpdatesPosixInApp(opts = {}) {
   }
 
   // Branch-pin so a non-main checkout doesn't get switched to main (and self-heal
-  // to main when the pinned branch no longer exists on origin).
+  // to main when the pinned branch no longer exists on origin). First-launch
+  // installs intentionally check out the package commit in detached-HEAD mode,
+  // so recover their branch from the bootstrap marker/install stamp.
   let branchArgs = []
   try {
     const head = await runGit(['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: updateRoot })
     const current = (head.stdout || '').trim()
-    if (head.code === 0 && current && current !== 'HEAD') {
-      branchArgs = ['--branch', await resolveHealedBranch(updateRoot, current)]
+    const markerBranch = readBootstrapMarker()?.pinnedBranch
+    const pinnedBranch =
+      head.code === 0 && current && current !== 'HEAD'
+        ? current
+        : markerBranch || INSTALL_STAMP?.branch || readDesktopUpdateConfig().branch
+    if (pinnedBranch) {
+      branchArgs = ['--branch', await resolveHealedBranch(updateRoot, pinnedBranch)]
     }
   } catch {
     // best effort
@@ -1474,15 +1481,15 @@ async function applyUpdatesPosixInApp(opts = {}) {
   if (rebuilt.code !== 0) {
     emitUpdateProgress({
       stage: 'error',
-      message: 'Backend updated, but the desktop rebuild failed. Restart Hermes to retry.',
+      message: `Backend updated, but the desktop rebuild failed. Restart ${APP_NAME} to retry.`,
       error: rebuilt.error || 'rebuild-failed'
     })
     return { ok: false, backendUpdated: true, error: 'desktop rebuild failed' }
   }
 
   const rebuiltApp = [
-    path.join(updateRoot, 'apps', 'desktop', 'release', 'mac-arm64', 'Hermes.app'),
-    path.join(updateRoot, 'apps', 'desktop', 'release', 'mac', 'Hermes.app')
+    path.join(updateRoot, 'apps', 'desktop', 'release', 'mac-arm64', 'LearningThread.app'),
+    path.join(updateRoot, 'apps', 'desktop', 'release', 'mac', 'LearningThread.app')
   ].find(directoryExists)
   const targetApp = runningAppBundle()
 
@@ -1491,7 +1498,7 @@ async function applyUpdatesPosixInApp(opts = {}) {
   if (!rebuiltApp || !targetApp) {
     emitUpdateProgress({
       stage: 'done',
-      message: 'Backend updated. Restart Hermes to load the new version.',
+      message: `Backend updated. Restart ${APP_NAME} to load the new version.`,
       percent: 100
     })
     return { ok: true, backendUpdated: true, rebuiltApp: rebuiltApp || null }
@@ -1527,7 +1534,7 @@ fi
   } catch (err) {
     emitUpdateProgress({
       stage: 'done',
-      message: 'Backend + app updated. Restart Hermes to load the new version.',
+      message: `Backend + app updated. Restart ${APP_NAME} to load the new version.`,
       percent: 100
     })
     rememberLog(`[updates] could not write swap script: ${err.message}; rebuilt app at ${rebuiltApp}`)
@@ -1613,7 +1620,7 @@ function resolveRendererIndex() {
 
 function resolveHermesCwd() {
   // In a packaged build, `process.cwd()` resolves to the install root (e.g.
-  // `…/win-unpacked` on Windows or `/Applications/Hermes.app/Contents/...`
+  // `…/win-unpacked` on Windows or `/Applications/LearningThread.app/Contents/...`
   // on macOS). Sessions spawned there leave files inside the app bundle
   // and bewilder users when "where did my files go?" is the install dir.
   // The user-configurable default project directory wins over everything,

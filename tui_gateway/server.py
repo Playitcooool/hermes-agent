@@ -3977,6 +3977,9 @@ def _(rid, params: dict) -> dict:
 @method("prompt.submit")
 def _(rid, params: dict) -> dict:
     sid, text = params.get("session_id", ""), params.get("text", "")
+    display_text = params.get("display_text")
+    if display_text is not None and not isinstance(display_text, str):
+        return _err(rid, 4004, "display_text must be a string")
     truncate_user_ordinal = params.get("truncate_before_user_ordinal")
     session, err = _sess_nowait(params, rid)
     if err:
@@ -4030,7 +4033,7 @@ def _(rid, params: dict) -> dict:
                 session["running"] = False
                 _clear_inflight_turn(session)
             return
-        _run_prompt_submit(rid, sid, session, text)
+        _run_prompt_submit(rid, sid, session, text, display_text=display_text)
 
     threading.Thread(target=run_after_agent_ready, daemon=True).start()
     return _ok(rid, {"status": "streaming"})
@@ -4183,7 +4186,9 @@ def _start_notification_poller(sid: str, session: dict) -> threading.Event:
     return stop
 
 
-def _run_prompt_submit(rid, sid: str, session: dict, text: Any) -> None:
+def _run_prompt_submit(
+    rid, sid: str, session: dict, text: Any, *, display_text: str | None = None
+) -> None:
     with session["history_lock"]:
         history = list(session["history"])
         history_version = int(session.get("history_version", 0))
@@ -4320,8 +4325,11 @@ def _run_prompt_submit(rid, sid: str, session: dict, text: Any) -> None:
                 "stream_callback": _stream,
             }
             try:
-                if "task_id" in inspect.signature(agent.run_conversation).parameters:
+                run_parameters = inspect.signature(agent.run_conversation).parameters
+                if "task_id" in run_parameters:
                     run_kwargs["task_id"] = session["session_key"]
+                if display_text is not None and "persist_user_message" in run_parameters:
+                    run_kwargs["persist_user_message"] = display_text
             except (TypeError, ValueError):
                 pass
             result = agent.run_conversation(run_message, **run_kwargs)
@@ -4330,10 +4338,23 @@ def _run_prompt_submit(rid, sid: str, session: dict, text: Any) -> None:
             status_note = None
             if isinstance(result, dict):
                 if isinstance(result.get("messages"), list):
+                    persisted_messages = result["messages"]
+                    if display_text is not None:
+                        # Side-panel prompts carry model-only routing instructions.
+                        # Persist the concise user-facing label instead so session
+                        # resume never exposes internal control text.
+                        persisted_messages = [
+                            dict(message) if isinstance(message, dict) else message
+                            for message in persisted_messages
+                        ]
+                        for message in reversed(persisted_messages):
+                            if isinstance(message, dict) and message.get("role") == "user":
+                                message["content"] = display_text
+                                break
                     with session["history_lock"]:
                         current_version = int(session.get("history_version", 0))
                         if current_version == history_version:
-                            session["history"] = result["messages"]
+                            session["history"] = persisted_messages
                             session["history_version"] = history_version + 1
                         else:
                             # History mutated externally during the turn
@@ -4473,8 +4494,8 @@ def _run_prompt_submit(rid, sid: str, session: dict, text: Any) -> None:
                 status == "complete"
                 and isinstance(raw, str)
                 and raw.strip()
-                and isinstance(text, str)
-                and text.strip()
+                and isinstance(display_text if display_text is not None else text, str)
+                and (display_text if display_text is not None else text).strip()
             ):
                 try:
                     from agent.title_generator import maybe_auto_title
@@ -4482,7 +4503,7 @@ def _run_prompt_submit(rid, sid: str, session: dict, text: Any) -> None:
                     maybe_auto_title(
                         _get_db(),
                         session.get("session_key") or sid,
-                        text,
+                        display_text if display_text is not None else text,
                         raw,
                         session.get("history", []),
                     )

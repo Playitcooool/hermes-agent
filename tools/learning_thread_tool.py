@@ -12,10 +12,12 @@ from tools.registry import registry
 _SCHEMA = {
     "name": "learning_thread",
     "description": (
-        "Maintain a persistent structured lesson. Call action=start only when the user explicitly asks "
-        "for sustained teaching (for example 'teach me' or 'I want to understand'). Ordinary questions "
-        "and tasks must receive ordinary answers. Side questions use branch_open/branch_answer and never "
-        "advance the canonical lesson. Action requirements: start needs topic, objective, a 5–7 item outline, "
+        "The required state backend for persistent structured lessons. You MUST call action=start when the "
+        "user explicitly requests a structured/multi-step lesson, sustained teaching, or Learning Thread mode; "
+        "never simulate activation with prose. Ordinary one-off questions receive ordinary answers. Every BTW "
+        "side-panel question or follow-up MUST use branch_open to record the user message, followed by "
+        "branch_answer, and must never advance the canonical lesson. Action requirements: start needs topic, "
+        "objective, a 5–7 item outline, "
         "the first section's Markdown content, and one checkpoint; continue teaches exactly the next outline "
         "section; checkpoint records and evaluates the learner's answer; branch_open anchors a side question "
         "to source_excerpt; branch_answer gives a focused answer and connection; back restores the source "

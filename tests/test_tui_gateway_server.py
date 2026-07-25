@@ -3150,6 +3150,66 @@ def test_prompt_submit_history_version_match_persists_normally(monkeypatch):
         server._sessions.pop("sid", None)
 
 
+def test_prompt_submit_persists_display_text_but_sends_model_instruction(monkeypatch):
+    """Side-panel control text stays model-only across session resume."""
+
+    seen = {}
+
+    class _Agent:
+        def run_conversation(
+            self,
+            prompt,
+            conversation_history=None,
+            stream_callback=None,
+            persist_user_message=None,
+        ):
+            seen["prompt"] = prompt
+            seen["persist_user_message"] = persist_user_message
+            return {
+                "final_response": "branch answer",
+                "messages": [
+                    {"role": "user", "content": prompt},
+                    {"role": "assistant", "content": "branch answer"},
+                ],
+            }
+
+    class _ImmediateThread:
+        def __init__(self, target=None, daemon=None):
+            self._target = target
+
+        def start(self):
+            self._target()
+
+    server._sessions["sid"] = _session(agent=_Agent())
+    try:
+        monkeypatch.setattr(server.threading, "Thread", _ImmediateThread)
+        monkeypatch.setattr(server, "_get_usage", lambda _a: {})
+        monkeypatch.setattr(server, "render_message", lambda _t, _c: "")
+        monkeypatch.setattr(server, "_emit", lambda *_a: None)
+
+        resp = server.handle_request(
+            {
+                "id": "1",
+                "method": "prompt.submit",
+                "params": {
+                    "session_id": "sid",
+                    "text": "[internal branch routing]\nWhy?",
+                    "display_text": "BTW · Why?",
+                },
+            }
+        )
+
+        assert resp.get("result")
+        assert seen["prompt"] == "[internal branch routing]\nWhy?"
+        assert seen["persist_user_message"] == "BTW · Why?"
+        assert server._sessions["sid"]["history"][0] == {
+            "role": "user",
+            "content": "BTW · Why?",
+        }
+    finally:
+        server._sessions.pop("sid", None)
+
+
 def test_prompt_submit_can_truncate_before_user_ordinal(monkeypatch):
     """Desktop user-message edits should restart the turn from the edited user."""
 

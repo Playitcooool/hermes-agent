@@ -89,6 +89,7 @@ interface PromptActionsOptions {
 
 interface SubmitTextOptions {
   attachments?: ComposerAttachment[]
+  displayText?: string
   fromQueue?: boolean
 }
 
@@ -215,7 +216,8 @@ export function usePromptActions({
 
   const submitPromptText = useCallback(
     async (rawText: string, options?: SubmitTextOptions) => {
-      const visibleText = rawText.trim()
+      const promptText = rawText.trim()
+      const visibleText = (options?.displayText ?? promptText).trim()
       const usingComposerAttachments = !options?.attachments
       const attachments = options?.attachments ?? $composerAttachments.get()
 
@@ -229,7 +231,7 @@ export function usePromptActions({
       const attachmentRefs = attachments.map(attachmentDisplayText).filter((r): r is string => Boolean(r))
 
       const text =
-        [contextRefs, terminalContextBlocks, visibleText].filter(Boolean).join('\n\n') ||
+        [contextRefs, terminalContextBlocks, promptText].filter(Boolean).join('\n\n') ||
         (hasImage ? 'What do you see in this image?' : '')
 
       if (!text || busyRef.current) {
@@ -329,7 +331,11 @@ export function usePromptActions({
         await syncImageAttachmentsForSubmit(sessionId, attachments, {
           updateComposerAttachments: usingComposerAttachments
         })
-        await requestGateway('prompt.submit', { session_id: sessionId, text })
+        await requestGateway('prompt.submit', {
+          session_id: sessionId,
+          text,
+          ...(options?.displayText !== undefined && { display_text: options.displayText })
+        })
 
         if (usingComposerAttachments) {
           clearComposerAttachments()

@@ -269,7 +269,7 @@ export function GatewaySettings() {
       notify({
         kind: 'success',
         title: apply ? 'Gateway connection restarting' : 'Gateway settings saved',
-        message: apply ? 'Hermes Desktop will reconnect using the saved settings.' : 'Saved for the next restart.'
+        message: apply ? 'Learning Thread will reconnect using the saved settings.' : 'Saved for the next restart.'
       })
     } catch (err) {
       notifyError(err, apply ? 'Could not apply gateway settings' : 'Could not save gateway settings')
@@ -393,7 +393,7 @@ export function GatewaySettings() {
           {state.envOverride ? <Pill tone="primary">env override</Pill> : null}
         </div>
         <p className="mt-2 max-w-2xl text-[length:var(--conversation-caption-font-size)] leading-(--conversation-caption-line-height) text-(--ui-text-tertiary)">
-          Hermes Desktop starts its own local gateway by default. Use a remote gateway when you want this app to control
+          Learning Thread starts its own local gateway by default. Use a remote gateway when you want this app to control
           an already-running Hermes backend on another machine or behind a trusted proxy.
         </p>
       </div>

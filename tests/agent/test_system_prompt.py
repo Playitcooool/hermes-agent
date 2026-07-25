@@ -55,3 +55,19 @@ class TestContextFileCwd:
     def test_configured_dir_when_terminal_cwd_set(self, monkeypatch, tmp_path):
         monkeypatch.setenv("TERMINAL_CWD", str(tmp_path))
         assert _captured_context_cwd(_make_agent()) == tmp_path
+
+
+def test_learning_thread_guidance_only_when_tool_is_available():
+    from agent.prompt_builder import LEARNING_THREAD_GUIDANCE
+
+    with (
+        patch("run_agent.load_soul_md", return_value=""),
+        patch("run_agent.build_nous_subscription_prompt", return_value=""),
+        patch("run_agent.build_environment_hints", return_value=""),
+        patch("run_agent.build_context_files_prompt", return_value=""),
+    ):
+        with_tool = build_system_prompt_parts(_make_agent(valid_tool_names=["learning_thread"]))
+        without_tool = build_system_prompt_parts(_make_agent())
+
+    assert LEARNING_THREAD_GUIDANCE in with_tool["stable"]
+    assert LEARNING_THREAD_GUIDANCE not in without_tool["stable"]

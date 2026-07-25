@@ -20,7 +20,9 @@ const EXECUTABLE_NAME = PACKAGE_JSON.build?.executableName || PRODUCT_NAME.repla
 // launch via install.ps1 / install.sh, per the Phase 1 thin-installer flow).
 const APP = (() => {
   if (PLATFORM === 'darwin') {
-    const appPath = path.join(RELEASE_ROOT, `mac-${ARCH}`, `${PRODUCT_NAME}.app`)
+    // electron-builder uses executableName for the on-disk bundle filename
+    // while productName remains the user-facing CFBundleDisplayName.
+    const appPath = path.join(RELEASE_ROOT, `mac-${ARCH}`, `${EXECUTABLE_NAME}.app`)
     return {
       appPath,
       binary: path.join(appPath, 'Contents', 'MacOS', EXECUTABLE_NAME),
@@ -118,10 +120,10 @@ function ensurePackagedApp() {
 
 function resolveDmgPath() {
   if (!exists(RELEASE_ROOT)) {
-    return path.join(RELEASE_ROOT, `Hermes-${PACKAGE_JSON.version}-${ARCH}.dmg`)
+    return path.join(RELEASE_ROOT, `${EXECUTABLE_NAME}-${PACKAGE_JSON.version}-${ARCH}.dmg`)
   }
 
-  const prefix = `Hermes-${PACKAGE_JSON.version}`
+  const prefix = `${EXECUTABLE_NAME}-${PACKAGE_JSON.version}`
   const candidates = fs
     .readdirSync(RELEASE_ROOT)
     .filter(name => name.endsWith('.dmg'))
@@ -135,11 +137,11 @@ function resolveDmgPath() {
 
   return candidates.length > 0
     ? path.join(RELEASE_ROOT, candidates[0])
-    : path.join(RELEASE_ROOT, `Hermes-${PACKAGE_JSON.version}-${ARCH}.dmg`)
+    : path.join(RELEASE_ROOT, `${EXECUTABLE_NAME}-${PACKAGE_JSON.version}-${ARCH}.dmg`)
 }
 
 function resolveNsisPath() {
-  // electron-builder NSIS artifactName template is 'Hermes-${version}-${os}-${arch}.${ext}'
+  // electron-builder NSIS artifactName template starts with executableName.
   if (!exists(RELEASE_ROOT)) return null
   const candidates = fs
     .readdirSync(RELEASE_ROOT)

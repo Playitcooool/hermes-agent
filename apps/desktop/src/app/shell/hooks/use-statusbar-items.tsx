@@ -180,7 +180,7 @@ export function useStatusbarItems({
     const tooltip = [
       applying ? updateApply.message || 'Update in progress' : null,
       !applying && behind > 0 && `${behind} commit${behind === 1 ? '' : 's'} behind ${updateStatus?.branch ?? '…'}`,
-      appVersion && `Hermes Desktop v${appVersion}`,
+      appVersion && `Learning Thread v${appVersion}`,
       sha && `commit ${sha}`,
       updateStatus?.branch && `branch ${updateStatus.branch}`
     ]

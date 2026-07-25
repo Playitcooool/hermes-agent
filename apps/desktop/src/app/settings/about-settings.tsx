@@ -93,7 +93,7 @@ export function AboutSettings() {
           <Sparkles className="size-8" />
         </span>
         <div>
-          <h2 className="text-lg font-semibold tracking-tight">Hermes Desktop</h2>
+          <h2 className="text-lg font-semibold tracking-tight">Learning Thread</h2>
           <p className="mt-1 text-xs text-muted-foreground">
             {version?.appVersion ? `Version ${version.appVersion}` : 'Version unavailable'}
           </p>

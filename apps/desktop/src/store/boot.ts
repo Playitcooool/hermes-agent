@@ -9,7 +9,7 @@ export interface DesktopBootState extends DesktopBootProgress {
 const INITIAL_BOOT_STATE: DesktopBootState = {
   error: null,
   fakeMode: false,
-  message: 'Starting Hermes Desktop…',
+  message: 'Starting Learning Thread…',
   phase: 'renderer.init',
   progress: 2,
   running: true,
@@ -61,7 +61,7 @@ export function setDesktopBootStep(step: {
   })
 }
 
-export function completeDesktopBoot(message = 'Hermes Desktop is ready') {
+export function completeDesktopBoot(message = 'Learning Thread is ready') {
   const current = $desktopBoot.get()
   $desktopBoot.set({
     ...current,

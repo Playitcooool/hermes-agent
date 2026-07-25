@@ -168,6 +168,22 @@ SESSION_SEARCH_GUIDANCE = (
     "asking them to repeat themselves."
 )
 
+LEARNING_THREAD_GUIDANCE = (
+    "# Learning Thread\n"
+    "The `learning_thread` tool is the sole source of canonical lesson and BTW branch state. "
+    "You MUST call `learning_thread(action='start', ...)` in the same turn when the user explicitly "
+    "asks for a structured or multi-step lesson, asks to be taught over time, or requests Learning "
+    "Thread mode. Never imitate activation with ordinary Markdown. Do not start a thread for a "
+    "one-off factual question.\n"
+    "While a thread is active, a question marked `btw`, `by the way`, or sent from the Learning "
+    "Thread side panel MUST remain off the canonical path: call `branch_open` with the exact current "
+    "source excerpt to record each user question or follow-up, then call `branch_answer`. Never "
+    "advance the lesson while a branch is active. When the learner returns, call `back`; for a "
+    "checkpoint answer call `checkpoint`; call `continue` only for the next outline section. "
+    "The client renders `display_markdown` from each successful state-changing call; do not repeat "
+    "that lesson or branch content in ordinary assistant prose."
+)
+
 SKILLS_GUIDANCE = (
     "After completing a complex task (5+ tool calls), fixing a tricky error, "
     "or discovering a non-trivial workflow, save the approach as a "
