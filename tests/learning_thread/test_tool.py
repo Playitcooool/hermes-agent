@@ -3,6 +3,13 @@ from __future__ import annotations
 import json
 
 from tools.learning_thread_tool import handle_learning_thread
+from tools.registry import registry
+from toolsets import _HERMES_CORE_TOOLS
+
+
+def test_learning_tool_is_available_to_the_default_agent():
+    assert "learning_thread" in _HERMES_CORE_TOOLS
+    assert registry.get_entry("learning_thread") is not None
 
 
 def test_tool_roundtrip_preserves_branch_anchor(tmp_path, monkeypatch):

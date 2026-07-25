@@ -1,5 +1,5 @@
 import { useStore } from '@nanostores/react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 import { CompactMarkdown } from '@/components/chat/compact-markdown'
 import { Button } from '@/components/ui/button'
@@ -56,9 +56,15 @@ export function LearningPanel({ gateway, onPrompt, sessionId }: LearningPanelPro
   const thread = useStore($learningThread)
   const loading = useStore($learningLoading)
   const [expanded, setExpanded] = useState(true)
+  const [selectedBranchId, setSelectedBranchId] = useState<null | string>(null)
   const section = thread ? activeLearningSection(thread) : null
-  const branch = thread ? activeLearningBranch(thread) : null
+  const activeBranch = thread ? activeLearningBranch(thread) : null
+  const branch = thread?.branches.find(item => item.id === (activeBranch?.id ?? selectedBranchId)) ?? null
   const progress = thread ? learningProgress(thread) : 0
+
+  useEffect(() => {
+    setSelectedBranchId(thread?.active_branch_id ?? null)
+  }, [thread?.active_branch_id, thread?.id])
 
   const branchAnswer = useMemo(
     () =>
@@ -108,12 +114,16 @@ export function LearningPanel({ gateway, onPrompt, sessionId }: LearningPanelPro
   }
 
   return (
-    <aside className="relative z-2 flex w-[19rem] shrink-0 flex-col border-l border-border/70 bg-card/85 backdrop-blur-xl">
-      <header className="flex items-start gap-2 border-b border-border/60 px-3 py-3">
-        <div className="min-w-0 flex-1">
-          <div className="font-mondwest text-xs text-display text-text-tertiary">Learning thread</div>
-          <h2 className="mt-1 truncate text-sm font-semibold text-text-primary">{thread.topic}</h2>
-        </div>
+    <aside
+      className={`relative z-2 flex shrink-0 flex-col border-l border-border/70 bg-card/85 backdrop-blur-xl transition-[width] ${expanded ? 'w-[19rem]' : 'w-12'}`}
+    >
+      <header className="flex items-start gap-2 border-b border-border/60 px-2.5 py-3">
+        {expanded && (
+          <div className="min-w-0 flex-1">
+            <div className="font-mondwest text-xs text-display text-text-tertiary">Learning thread</div>
+            <h2 className="mt-1 truncate text-sm font-semibold text-text-primary">{thread.topic}</h2>
+          </div>
+        )}
         <Button
           aria-label={expanded ? 'Collapse learning panel' : 'Expand learning panel'}
           className="size-7 p-0"
@@ -179,9 +189,15 @@ export function LearningPanel({ gateway, onPrompt, sessionId }: LearningPanelPro
                   <strong>Connection:</strong> {branch.connection}
                 </p>
               )}
-              <Button className="mt-3 w-full" disabled={loading} onClick={() => void returnToLesson()} size="sm">
-                <Codicon name="arrow-left" /> Return to lesson
-              </Button>
+              {activeBranch?.id === branch.id ? (
+                <Button className="mt-3 w-full" disabled={loading} onClick={() => void returnToLesson()} size="sm">
+                  <Codicon name="arrow-left" /> Return to lesson
+                </Button>
+              ) : (
+                <Button className="mt-3 w-full" onClick={() => setSelectedBranchId(null)} size="sm" variant="outline">
+                  <Codicon name="arrow-left" /> Current section
+                </Button>
+              )}
             </section>
           ) : (
             <section className="mt-5 rounded-lg border border-border/60 bg-background/50 p-3">
@@ -206,13 +222,18 @@ export function LearningPanel({ gateway, onPrompt, sessionId }: LearningPanelPro
               <div className="font-mondwest text-xs text-display text-text-tertiary">Question branches</div>
               <ul className="mt-2 space-y-1.5">
                 {thread.branches.map(item => (
-                  <li
-                    className="flex items-center gap-2 rounded-md bg-muted/40 px-2.5 py-2 text-xs text-text-secondary"
-                    key={item.id}
-                  >
-                    <Codicon name={item.status === 'resolved' ? 'pass-filled' : 'git-branch'} />
-                    <span className="min-w-0 flex-1 truncate">{item.title}</span>
-                    <span className="text-text-tertiary">{item.status}</span>
+                  <li key={item.id}>
+                    <button
+                      className={`flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-xs ${
+                        branch?.id === item.id ? 'bg-primary/10 text-text-primary' : 'bg-muted/40 text-text-secondary'
+                      }`}
+                      onClick={() => setSelectedBranchId(item.id)}
+                      type="button"
+                    >
+                      <Codicon name={item.status === 'resolved' ? 'pass-filled' : 'git-branch'} />
+                      <span className="min-w-0 flex-1 truncate">{item.title}</span>
+                      <span className="text-text-tertiary">{item.status}</span>
+                    </button>
                   </li>
                 ))}
               </ul>
