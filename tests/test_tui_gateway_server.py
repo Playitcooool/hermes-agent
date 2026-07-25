@@ -3214,6 +3214,41 @@ def test_prompt_submit_persists_display_text_but_sends_model_instruction(monkeyp
         server._sessions.pop("sid", None)
 
 
+def test_prompt_force_tool_infers_explicit_learning_thread_intent():
+    for prompt in (
+        "Start a structured multi-step Learning Thread lesson teaching me "
+        "Python generators.",
+        "Teach me Python generators using Learning Thread.",
+    ):
+        assert (
+            server._prompt_force_tool(
+                prompt
+            )
+            == "learning_thread"
+        )
+    assert server._prompt_force_tool("Why is the daytime sky blue?") is None
+
+
+def test_prompt_force_tool_infers_learning_panel_control_prompts():
+    assert (
+        server._prompt_force_tool(
+            "[Learning Thread BTW side panel]\n"
+            'Use learning_thread(action="branch_open") for this follow-up.'
+        )
+        == "learning_thread"
+    )
+    assert (
+        server._prompt_force_tool(
+            'Continue the durable Learning Thread with learning_thread(action="continue").'
+        )
+        == "learning_thread"
+    )
+
+
+def test_prompt_force_tool_preserves_explicit_request():
+    assert server._prompt_force_tool("ordinary prompt", "terminal") == "terminal"
+
+
 def test_prompt_submit_can_truncate_before_user_ordinal(monkeypatch):
     """Desktop user-message edits should restart the turn from the edited user."""
 

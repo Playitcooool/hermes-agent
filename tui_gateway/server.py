@@ -7,6 +7,7 @@ import json
 import logging
 import os
 import queue
+import re
 import subprocess
 import sys
 import threading
@@ -3974,15 +3975,57 @@ def _(rid, params: dict) -> dict:
 # ── Methods: prompt ──────────────────────────────────────────────────
 
 
+_LEARNING_THREAD_EXPLICIT_INTENT_RE = re.compile(
+    r"(?:"
+    r"\b(?:structured|multi[-\s]?step|step[-\s]?by[-\s]?step|ongoing)\s+"
+    r"(?:lesson|course|tutorial)\b"
+    r"|"
+    r"\bteach\s+me\b(?=[\s\S]*\b(?:structured|lesson|course|over\s+time)\b)"
+    r")",
+    re.IGNORECASE,
+)
+_LEARNING_THREAD_NAME_RE = re.compile(r"\blearning\s+thread\b", re.IGNORECASE)
+_LEARNING_THREAD_TEACHING_TERM_RE = re.compile(
+    r"\b(?:learn(?:ing)?|lesson|teach(?:ing)?|tutorial|course)\b",
+    re.IGNORECASE,
+)
+
+
+def _prompt_force_tool(text: Any, requested: Any = None) -> str | None:
+    """Resolve a one-turn tool requirement, including durable learning UI intents."""
+    if isinstance(requested, str) and requested.strip():
+        return requested.strip()
+    if not isinstance(text, str):
+        return None
+
+    normalized = text.strip()
+    if not normalized:
+        return None
+    if (
+        "[Learning Thread BTW side panel]" in normalized
+        or "learning_thread(action=" in normalized
+        or (
+            _LEARNING_THREAD_NAME_RE.search(normalized)
+            and _LEARNING_THREAD_TEACHING_TERM_RE.search(normalized)
+        )
+        or _LEARNING_THREAD_EXPLICIT_INTENT_RE.search(normalized)
+    ):
+        return "learning_thread"
+    return None
+
+
 @method("prompt.submit")
 def _(rid, params: dict) -> dict:
     sid, text = params.get("session_id", ""), params.get("text", "")
     display_text = params.get("display_text")
     if display_text is not None and not isinstance(display_text, str):
         return _err(rid, 4004, "display_text must be a string")
-    force_tool = params.get("force_tool")
-    if force_tool is not None and not isinstance(force_tool, str):
+    requested_force_tool = params.get("force_tool")
+    if requested_force_tool is not None and not isinstance(
+        requested_force_tool, str
+    ):
         return _err(rid, 4004, "force_tool must be a string")
+    force_tool = _prompt_force_tool(text, requested_force_tool)
     truncate_user_ordinal = params.get("truncate_before_user_ordinal")
     session, err = _sess_nowait(params, rid)
     if err:
