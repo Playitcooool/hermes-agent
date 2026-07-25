@@ -11,6 +11,7 @@ import {
   $learningThread,
   activeLearningBranch,
   activeLearningSection,
+  buildLearningBranchPrompt,
   learningProgress,
   type LearningThread,
   setLearningLoading,
@@ -58,7 +59,6 @@ export function LearningPanel({ gateway, onPrompt, sessionId }: LearningPanelPro
   const loading = useStore($learningLoading)
   const [expanded, setExpanded] = useState(true)
   const [selectedBranchId, setSelectedBranchId] = useState<null | string>(null)
-  const [branchComposerOpen, setBranchComposerOpen] = useState(false)
   const [branchDraft, setBranchDraft] = useState('')
   const [branchSubmitting, setBranchSubmitting] = useState(false)
   const section = thread ? activeLearningSection(thread) : null
@@ -68,7 +68,6 @@ export function LearningPanel({ gateway, onPrompt, sessionId }: LearningPanelPro
 
   useEffect(() => {
     setSelectedBranchId(thread?.active_branch_id ?? null)
-    setBranchComposerOpen(Boolean(thread?.active_branch_id))
   }, [thread?.active_branch_id, thread?.id])
 
   if (!thread) {
@@ -85,7 +84,6 @@ export function LearningPanel({ gateway, onPrompt, sessionId }: LearningPanelPro
     try {
       const result = await gateway.request<{ thread: LearningThread }>('learning.back', { session_id: sessionId })
       setLearningThread(result.thread)
-      setBranchComposerOpen(false)
       setBranchDraft('')
     } finally {
       setLearningLoading(false)
@@ -95,33 +93,12 @@ export function LearningPanel({ gateway, onPrompt, sessionId }: LearningPanelPro
   const submitBranchQuestion = async (event?: FormEvent) => {
     event?.preventDefault()
     const question = branchDraft.trim()
-    const sourceContent = section?.content.trim() || section?.title || ''
 
-    if (!question || branchSubmitting || loading) {
+    if (!question || !activeBranch || branchSubmitting || loading) {
       return
     }
 
-    const instruction = activeBranch
-      ? [
-          '[Learning Thread BTW side panel]',
-          'Record the following follow-up in the active side branch with learning_thread(action="branch_open"),',
-          'then answer it with learning_thread(action="branch_answer"). Do not advance or rewrite the canonical lesson.',
-          '',
-          question
-        ].join('\n')
-      : [
-          '[Learning Thread BTW side panel]',
-          'Open a durable side branch for the following question. Select the relevant exact words from the supplied',
-          'current lesson section and pass them verbatim as source_excerpt to',
-          'learning_thread(action="branch_open"), then answer with learning_thread(action="branch_answer").',
-          'Do not advance or rewrite the canonical lesson.',
-          '',
-          '<current_lesson_section>',
-          sourceContent,
-          '</current_lesson_section>',
-          '',
-          question
-        ].join('\n')
+    const instruction = buildLearningBranchPrompt(thread, question)
 
     setBranchSubmitting(true)
 
@@ -165,7 +142,7 @@ export function LearningPanel({ gateway, onPrompt, sessionId }: LearningPanelPro
   return (
     <aside
       className={`relative z-2 flex shrink-0 flex-col border-l border-border/70 bg-card/85 backdrop-blur-xl transition-[width] ${
-        expanded ? (branch || branchComposerOpen ? 'w-[24rem]' : 'w-[19rem]') : 'w-12'
+        expanded ? (branch ? 'w-[24rem]' : 'w-[19rem]') : 'w-12'
       }`}
     >
       <header className="flex items-start gap-2 border-b border-border/60 px-2.5 py-3">
@@ -227,13 +204,13 @@ export function LearningPanel({ gateway, onPrompt, sessionId }: LearningPanelPro
             })}
           </ol>
 
-          {branch || branchComposerOpen ? (
+          {branch ? (
             <section className="mt-5 rounded-lg border border-warning/40 bg-warning/5 p-3">
               <div className="flex items-center justify-between gap-2">
                 <div>
                   <div className="font-mondwest text-xs text-display text-warning">BTW thread</div>
                   <h3 className="mt-1 text-sm font-medium text-text-primary">
-                    {branch?.title ?? 'Ask without leaving the lesson'}
+                    {branch.title}
                   </h3>
                 </div>
                 {!activeBranch && (
@@ -241,7 +218,6 @@ export function LearningPanel({ gateway, onPrompt, sessionId }: LearningPanelPro
                     aria-label="Close BTW panel"
                     className="size-7 p-0"
                     onClick={() => {
-                      setBranchComposerOpen(false)
                       setSelectedBranchId(null)
                     }}
                     size="icon"
@@ -283,14 +259,14 @@ export function LearningPanel({ gateway, onPrompt, sessionId }: LearningPanelPro
                 </p>
               )}
 
-              {(activeBranch || !branch) && (
+              {activeBranch && (
                 <form className="mt-3 space-y-2" onSubmit={event => void submitBranchQuestion(event)}>
                   <Textarea
-                    aria-label={activeBranch ? 'Follow up in BTW thread' : 'Ask a BTW question'}
+                    aria-label="Follow up in BTW thread"
                     disabled={branchSubmitting || loading}
                     onChange={event => setBranchDraft(event.target.value)}
                     onKeyDown={handleBranchKeyDown}
-                    placeholder={activeBranch ? 'Follow up here…' : 'Ask a side question…'}
+                    placeholder="Follow up here…"
                     rows={3}
                     value={branchDraft}
                   />
@@ -300,7 +276,7 @@ export function LearningPanel({ gateway, onPrompt, sessionId }: LearningPanelPro
                     size="sm"
                     type="submit"
                   >
-                    <Codicon name="send" /> {activeBranch ? 'Send follow-up' : 'Start BTW thread'}
+                    <Codicon name="send" /> Send follow-up
                   </Button>
                 </form>
               )}
@@ -341,16 +317,9 @@ export function LearningPanel({ gateway, onPrompt, sessionId }: LearningPanelPro
                 >
                   Continue lesson <Codicon name="arrow-right" />
                 </Button>
-                <Button
-                  onClick={() => {
-                    setSelectedBranchId(null)
-                    setBranchComposerOpen(true)
-                  }}
-                  size="sm"
-                  variant="outline"
-                >
-                  <Codicon name="git-branch" /> Open BTW panel
-                </Button>
+                <p className="rounded-md border border-border/60 bg-muted/30 px-2.5 py-2 text-xs text-text-secondary">
+                  Use <code>/btw &lt;question&gt;</code> to open a side branch here.
+                </p>
               </div>
             </section>
           )}

@@ -29,7 +29,7 @@ import {
 } from '@/store/composer'
 import { clearNotifications, notify, notifyError } from '@/store/notifications'
 import { requestDesktopOnboarding } from '@/store/onboarding'
-import { shouldStartLearningThread } from '@/store/learning'
+import { $learningThread, prepareLearningBtwSubmission, shouldStartLearningThread } from '@/store/learning'
 import {
   $busy,
   $messages,
@@ -466,6 +466,23 @@ export function usePromptActions({
 
         if (normalizedName === 'skin') {
           renderSlashOutput(handleSkinCommand(arg))
+
+          return
+        }
+
+        if (normalizedName === 'btw') {
+          const submission = prepareLearningBtwSubmission($learningThread.get(), arg)
+
+          if (typeof submission === 'string') {
+            renderSlashOutput(submission)
+
+            return
+          }
+
+          await submitPromptText(submission.prompt, {
+            displayText: submission.displayText,
+            forceTool: submission.forceTool
+          })
 
           return
         }

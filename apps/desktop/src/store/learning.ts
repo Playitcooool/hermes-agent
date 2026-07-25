@@ -86,6 +86,64 @@ export function learningProgress(thread: LearningThread): number {
   return Math.min(100, Math.round((thread.sections.length / thread.outline.length) * 100))
 }
 
+export function buildLearningBranchPrompt(thread: LearningThread, rawQuestion: string): string {
+  const question = rawQuestion.trim()
+  const activeBranch = activeLearningBranch(thread)
+
+  if (activeBranch) {
+    return [
+      '[Learning Thread BTW side panel]',
+      'Record the following follow-up in the active side branch with learning_thread(action="branch_open"),',
+      'then answer it with learning_thread(action="branch_answer"). Do not advance or rewrite the canonical lesson.',
+      '',
+      question
+    ].join('\n')
+  }
+
+  const section = activeLearningSection(thread)
+  const sourceContent = section?.content.trim() || section?.title || ''
+
+  return [
+    '[Learning Thread BTW side panel]',
+    'Open a durable side branch for the following question. Select the relevant exact words from the supplied',
+    'current lesson section and pass them verbatim as source_excerpt to',
+    'learning_thread(action="branch_open"), then answer with learning_thread(action="branch_answer").',
+    'Do not advance or rewrite the canonical lesson.',
+    '',
+    '<current_lesson_section>',
+    sourceContent,
+    '</current_lesson_section>',
+    '',
+    question
+  ].join('\n')
+}
+
+export interface LearningBtwSubmission {
+  displayText: string
+  forceTool: 'learning_thread'
+  prompt: string
+}
+
+export function prepareLearningBtwSubmission(
+  thread: LearningThread | null,
+  rawQuestion: string
+): LearningBtwSubmission | string {
+  const question = rawQuestion.trim()
+
+  if (!question) {
+    return 'usage: /btw <question>'
+  }
+  if (!thread) {
+    return '/btw requires an active Learning Thread lesson'
+  }
+
+  return {
+    displayText: `BTW · ${question}`,
+    forceTool: 'learning_thread',
+    prompt: buildLearningBranchPrompt(thread, question)
+  }
+}
+
 export function shouldStartLearningThread(text: string): boolean {
   const normalized = text.trim()
 

@@ -13,6 +13,7 @@ describe('desktop slash command curation', () => {
   it('keeps core desktop chat commands in suggestions', () => {
     expect(isDesktopSlashSuggestion('/new')).toBe(true)
     expect(isDesktopSlashSuggestion('/branch')).toBe(true)
+    expect(isDesktopSlashSuggestion('/btw')).toBe(true)
     expect(isDesktopSlashSuggestion('/skin')).toBe(true)
     expect(isDesktopSlashSuggestion('/usage')).toBe(true)
     expect(isDesktopSlashSuggestion('/yolo')).toBe(true)
@@ -66,11 +67,13 @@ describe('desktop slash command curation', () => {
 
     expect(filtered.categories).toEqual([
       { name: 'Session', pairs: [['/new', 'Start a new desktop chat']] },
-      { name: 'User commands', pairs: [['/ship-it', 'Run release checklist']] }
+      { name: 'User commands', pairs: [['/ship-it', 'Run release checklist']] },
+      { name: 'Learning', pairs: [['/btw', 'Open a lesson side branch: /btw <question>']] }
     ])
     expect(filtered.pairs).toEqual([
       ['/new', 'Start a new desktop chat'],
-      ['/ship-it', 'Run release checklist']
+      ['/ship-it', 'Run release checklist'],
+      ['/btw', 'Open a lesson side branch: /btw <question>']
     ])
     expect(filtered.skill_count).toBe(2)
   })

@@ -44,7 +44,7 @@ afterEach(() => {
 })
 
 describe('LearningPanel BTW side thread', () => {
-  it('submits an anchored question from its own right-panel composer', async () => {
+  it('directs new branches through /btw instead of an idle prompt', () => {
     const onPrompt = vi.fn().mockResolvedValue(true)
     setLearningThread(baseThread)
 
@@ -56,20 +56,10 @@ describe('LearningPanel BTW side thread', () => {
       />
     )
 
-    fireEvent.click(screen.getByRole('button', { name: 'Open BTW panel' }))
-    const composer = screen.getByRole('textbox', { name: 'Ask a BTW question' })
-    fireEvent.change(composer, { target: { value: 'Why does this save memory?' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Start BTW thread' }))
-
-    await waitFor(() => expect(onPrompt).toHaveBeenCalledOnce())
-    const [instruction, displayText, forceTool] = onPrompt.mock.calls[0]
-
-    expect(instruction).toContain('[Learning Thread BTW side panel]')
-    expect(instruction).toContain(baseThread.sections[0].content)
-    expect(instruction).toContain('learning_thread(action="branch_open")')
-    expect(displayText).toBe('BTW · Why does this save memory?')
-    expect(forceTool).toBe('learning_thread')
-    await waitFor(() => expect((composer as HTMLTextAreaElement).value).toBe(''))
+    expect(screen.getByText(/Use/).textContent).toContain('/btw <question>')
+    expect(screen.queryByRole('button', { name: 'Open BTW panel' })).toBeNull()
+    expect(screen.queryByRole('textbox', { name: 'Ask a BTW question' })).toBeNull()
+    expect(onPrompt).not.toHaveBeenCalled()
   })
 
   it('keeps follow-ups in the active BTW composer on Enter', async () => {

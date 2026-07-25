@@ -26,6 +26,7 @@ const DESKTOP_COMMAND_META = [
   ['/agents', 'Show active desktop sessions and running tasks'],
   ['/background', 'Run a prompt in the background'],
   ['/branch', 'Branch the latest message into a new chat'],
+  ['/btw', 'Open a lesson side branch: /btw <question>'],
   ['/compress', 'Compress this conversation context'],
   ['/debug', 'Create a debug report'],
   ['/goal', 'Manage the standing goal for this session'],
@@ -49,7 +50,6 @@ const DESKTOP_COMMANDS: ReadonlySet<string> = new Set(DESKTOP_COMMAND_META.map((
 
 const DESKTOP_ALIASES = new Map([
   ['/bg', '/background'],
-  ['/btw', '/background'],
   ['/fork', '/branch'],
   ['/q', '/queue'],
   ['/reload_mcp', '/reload-mcp'],
@@ -261,10 +261,22 @@ export function filterDesktopCommandsCatalog(catalog: CommandsCatalogLike): Comm
     ?.filter(([command]) => isDesktopSlashSuggestion(command))
     .map(([command, description]) => [command, desktopSlashDescription(command, description)] as [string, string])
 
+  const catalogPairs = pairs ?? []
+  if (!catalogPairs.some(([command]) => command === '/btw')) {
+    catalogPairs.push(['/btw', desktopSlashDescription('/btw')])
+  }
+
+  if (categories && !categories.some(section => section.pairs.some(([command]) => command === '/btw'))) {
+    categories.push({
+      name: 'Learning',
+      pairs: [['/btw', desktopSlashDescription('/btw')]]
+    })
+  }
+
   return {
     ...catalog,
     ...(categories ? { categories } : {}),
-    ...(pairs ? { pairs } : {})
+    pairs: catalogPairs
   }
 }
 

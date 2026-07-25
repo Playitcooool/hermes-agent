@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest'
 import {
   activeLearningBranch,
   activeLearningSection,
+  buildLearningBranchPrompt,
   learningProgress,
+  prepareLearningBtwSubmission,
   shouldStartLearningThread,
   type LearningThread
 } from './learning'
@@ -81,4 +83,43 @@ describe('learning thread activation intent', () => {
       expect(shouldStartLearningThread(text)).toBe(false)
     }
   )
+})
+
+describe('learning BTW prompts', () => {
+  it('anchors a new /btw branch to the current lesson section', () => {
+    const value = thread()
+    value.active_branch_id = null
+    value.branches = []
+
+    const prompt = buildLearningBranchPrompt(value, '  Why does this save memory?  ')
+
+    expect(prompt).toContain('[Learning Thread BTW side panel]')
+    expect(prompt).toContain(value.sections[0].content)
+    expect(prompt).toContain('learning_thread(action="branch_open")')
+    expect(prompt).toContain('Why does this save memory?')
+  })
+
+  it('routes later questions into the active branch', () => {
+    const prompt = buildLearningBranchPrompt(thread(), 'And infinite streams?')
+
+    expect(prompt).toContain('active side branch')
+    expect(prompt).not.toContain('<current_lesson_section>')
+  })
+
+  it('prepares the exact /btw submission payload and guards invalid entry', () => {
+    const value = thread()
+    value.active_branch_id = null
+    value.branches = []
+
+    expect(prepareLearningBtwSubmission(null, 'Why?')).toBe(
+      '/btw requires an active Learning Thread lesson'
+    )
+    expect(prepareLearningBtwSubmission(value, '   ')).toBe(
+      'usage: /btw <question>'
+    )
+    expect(prepareLearningBtwSubmission(value, '  Why does this save memory? ')).toMatchObject({
+      displayText: 'BTW · Why does this save memory?',
+      forceTool: 'learning_thread'
+    })
+  })
 })
