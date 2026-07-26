@@ -20,7 +20,7 @@ _SCHEMA = {
         "objective, a 5–7 item outline, "
         "the first section's Markdown content, and one checkpoint; continue teaches exactly the next outline "
         "section; checkpoint records and evaluates the learner's answer; branch_open anchors a side question "
-        "to source_excerpt; branch_answer gives a focused answer and connection; back restores the source "
+        "to source_excerpt; branch_answer gives a focused answer; back restores the source "
         "section. After a successful state-changing call, do not repeat display_markdown in ordinary prose."
     ),
     "parameters": {
@@ -55,7 +55,6 @@ _SCHEMA = {
             },
             "question": {"type": "string"},
             "source_excerpt": {"type": "string"},
-            "connection": {"type": "string"},
             "misconception": {"type": "string"},
             "resolution": {"type": "string"},
         },
@@ -88,8 +87,7 @@ def _branch_markdown(state: dict[str, Any]) -> str:
     if not branch:
         return ""
     messages = "\n\n".join(message.get("content", "") for message in branch.get("messages", []))
-    connection = f'\n\n> **Connection to the lesson:** {branch["connection"]}' if branch.get("connection") else ""
-    return f'## Side question · {branch["title"]}\n\n{messages}{connection}'
+    return f'## Side question · {branch["title"]}\n\n{messages}'
 
 
 def _result(state: dict[str, Any] | None, action: str) -> str:
@@ -139,7 +137,6 @@ def handle_learning_thread(args: dict[str, Any], task_id: str | None = None, **_
         elif action == "branch_answer":
             state = store.answer_branch(
                 content=args.get("content", ""),
-                connection=args.get("connection", ""),
                 misconception=args.get("misconception"),
             )
         elif action == "back":

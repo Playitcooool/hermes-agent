@@ -27,7 +27,6 @@ export interface LearningBranchMessage {
 }
 
 export interface LearningBranch {
-  connection: null | string
   id: string
   messages: LearningBranchMessage[]
   misconception: null | string
@@ -90,39 +89,8 @@ export function learningProgress(thread: LearningThread): number {
   return Math.min(100, Math.round((completedSections / thread.outline.length) * 100))
 }
 
-export function buildLearningBranchPrompt(thread: LearningThread, rawQuestion: string): string {
-  const question = rawQuestion.trim()
-  const activeBranch = activeLearningBranch(thread)
-
-  if (activeBranch) {
-    return [
-      '[Learning Thread BTW side panel]',
-      'Answer the following follow-up in the active side branch.',
-      'Do not advance or rewrite the canonical lesson. Return only the focused answer.',
-      '',
-      question
-    ].join('\n')
-  }
-
-  const section = activeLearningSection(thread)
-  const sourceContent = section?.content.trim() || section?.title || ''
-
-  return [
-    '[Learning Thread BTW side panel]',
-    'Answer the following side question using the supplied current lesson section.',
-    'Do not advance or rewrite the canonical lesson. Return only the focused answer.',
-    '',
-    '<current_lesson_section>',
-    sourceContent,
-    '</current_lesson_section>',
-    '',
-    question
-  ].join('\n')
-}
-
 export interface LearningBtwSubmission {
-  displayText: string
-  prompt: string
+  question: string
 }
 
 export function prepareLearningBtwSubmission(
@@ -139,8 +107,7 @@ export function prepareLearningBtwSubmission(
   }
 
   return {
-    displayText: `BTW · ${question}`,
-    prompt: buildLearningBranchPrompt(thread, question)
+    question
   }
 }
 

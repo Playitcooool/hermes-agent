@@ -29,7 +29,13 @@ import {
 } from '@/store/composer'
 import { clearNotifications, notify, notifyError } from '@/store/notifications'
 import { requestDesktopOnboarding } from '@/store/onboarding'
-import { $learningThread, prepareLearningBtwSubmission, shouldStartLearningThread } from '@/store/learning'
+import {
+  $learningThread,
+  type LearningThread,
+  prepareLearningBtwSubmission,
+  setLearningThread,
+  shouldStartLearningThread
+} from '@/store/learning'
 import {
   $busy,
   $messages,
@@ -482,10 +488,15 @@ export function usePromptActions({
             return
           }
 
-          await submitPromptText(submission.prompt, {
-            displayText: submission.displayText,
-            sidePanel: true
-          })
+          try {
+            const result = await requestGateway<{ thread: LearningThread }>('learning.branch.submit', {
+              session_id: sessionId,
+              question: submission.question
+            })
+            setLearningThread(result.thread)
+          } catch (error) {
+            notifyError(error, 'BTW request failed')
+          }
 
           return
         }

@@ -53,7 +53,6 @@ def test_branch_returns_to_exact_canonical_section_without_advancing(store):
     branch_id = state["active_branch_id"]
     state = store.answer_branch(
         content="It controls logit variance.",
-        connection="Stable logits preserve useful softmax gradients.",
     )
 
     with pytest.raises(LearningThreadError, match="return"):

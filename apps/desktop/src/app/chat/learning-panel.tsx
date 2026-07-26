@@ -11,7 +11,6 @@ import {
   $learningThread,
   activeLearningBranch,
   activeLearningSection,
-  buildLearningBranchPrompt,
   type LearningThread,
   setLearningLoading,
   setLearningThread
@@ -19,7 +18,6 @@ import {
 
 interface LearningPanelProps {
   gateway: HermesGateway | null
-  onPrompt: (text: string, displayText?: string, forceTool?: string) => Promise<boolean> | boolean
   sessionId: null | string
 }
 
@@ -79,12 +77,13 @@ export function LearningMainControls({ onPrompt }: LearningMainControlsProps) {
   )
 }
 
-export function LearningPanel({ gateway, onPrompt, sessionId }: LearningPanelProps) {
+export function LearningPanel({ gateway, sessionId }: LearningPanelProps) {
   const thread = useStore($learningThread)
   const loading = useStore($learningLoading)
   const [expanded, setExpanded] = useState(true)
   const [selectedBranchId, setSelectedBranchId] = useState<null | string>(null)
   const [branchDraft, setBranchDraft] = useState('')
+  const [branchError, setBranchError] = useState('')
   const [branchSubmitting, setBranchSubmitting] = useState(false)
   const activeBranch = thread ? activeLearningBranch(thread) : null
   const branch = thread?.branches.find(item => item.id === (activeBranch?.id ?? selectedBranchId)) ?? null
@@ -117,20 +116,22 @@ export function LearningPanel({ gateway, onPrompt, sessionId }: LearningPanelPro
     event?.preventDefault()
     const question = branchDraft.trim()
 
-    if (!question || branchSubmitting || loading || (branch && !activeBranch)) {
+    if (!gateway || !sessionId || !question || branchSubmitting || loading || (branch && !activeBranch)) {
       return
     }
 
-    const instruction = buildLearningBranchPrompt(thread, question)
-
+    setBranchError('')
     setBranchSubmitting(true)
 
     try {
-      const submitted = await onPrompt(instruction, `BTW · ${question}`)
-
-      if (submitted) {
-        setBranchDraft('')
-      }
+      const result = await gateway.request<{ thread: LearningThread }>('learning.branch.submit', {
+        session_id: sessionId,
+        question
+      })
+      setLearningThread(result.thread)
+      setBranchDraft('')
+    } catch (error) {
+      setBranchError(error instanceof Error ? error.message : 'Could not answer the BTW question')
     } finally {
       setBranchSubmitting(false)
     }
@@ -171,8 +172,12 @@ export function LearningPanel({ gateway, onPrompt, sessionId }: LearningPanelPro
       <header className="flex items-start gap-2 border-b border-border/60 px-2.5 py-3">
         {expanded && (
           <div className="min-w-0 flex-1">
-            <div className="font-mondwest text-xs text-display text-text-tertiary">Learning thread</div>
-            <h2 className="mt-1 truncate text-sm font-semibold text-text-primary">{thread.topic}</h2>
+            <div className="font-mondwest text-xs text-display text-text-tertiary">
+              {branch ? 'BTW' : 'Learning thread'}
+            </div>
+            <h2 className="mt-1 truncate text-sm font-semibold text-text-primary">
+              {branch?.title ?? thread.topic}
+            </h2>
           </div>
         )}
         <Button
@@ -188,87 +193,60 @@ export function LearningPanel({ gateway, onPrompt, sessionId }: LearningPanelPro
 
       {expanded && (
         <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
-          <p className="text-xs leading-relaxed text-text-secondary">{thread.objective}</p>
+          {!branch && (
+            <>
+              <p className="text-xs leading-relaxed text-text-secondary">{thread.objective}</p>
 
-          <ol aria-label="Lesson outline" className="mt-4 space-y-1">
-            {thread.outline.map((item, index) => {
-              const materialized = thread.sections[index]
-              const active = materialized?.id === thread.active_section_id
+              <ol aria-label="Lesson outline" className="mt-4 space-y-1">
+                {thread.outline.map((item, index) => {
+                  const materialized = thread.sections[index]
+                  const active = materialized?.id === thread.active_section_id
 
-              return (
-                <li
-                  className={`rounded-md border px-2.5 py-2 text-xs ${
-                    active
-                      ? 'border-primary/40 bg-primary/10 text-text-primary'
-                      : materialized
-                        ? 'border-transparent text-text-secondary'
-                        : 'border-transparent text-text-disabled'
-                  }`}
-                  key={item.id}
-                >
-                  <div className="flex items-center gap-2">
-                    <Codicon name={materialized && !active ? 'check' : active ? 'circle-filled' : 'circle-outline'} />
-                    <span className="min-w-0 truncate">
-                      {index + 1}. {item.title}
-                    </span>
-                  </div>
-                </li>
-              )
-            })}
-          </ol>
+                  return (
+                    <li
+                      className={`rounded-md border px-2.5 py-2 text-xs ${
+                        active
+                          ? 'border-primary/40 bg-primary/10 text-text-primary'
+                          : materialized
+                            ? 'border-transparent text-text-secondary'
+                            : 'border-transparent text-text-disabled'
+                      }`}
+                      key={item.id}
+                    >
+                      <div className="flex items-center gap-2">
+                        <Codicon name={materialized && !active ? 'check' : active ? 'circle-filled' : 'circle-outline'} />
+                        <span className="min-w-0 truncate">
+                          {index + 1}. {item.title}
+                        </span>
+                      </div>
+                    </li>
+                  )
+                })}
+              </ol>
+            </>
+          )}
 
-          <section className="mt-5 rounded-lg border border-warning/40 bg-warning/5 p-3">
-              <div className="flex items-center justify-between gap-2">
-                <div>
-                  <div className="font-mondwest text-xs text-display text-warning">BTW thread</div>
-                  <h3 className="mt-1 text-sm font-medium text-text-primary">
-                    {branch?.title ?? 'Ask without leaving the lesson'}
-                  </h3>
-                </div>
-                {branch && !activeBranch && (
-                  <Button
-                    aria-label="Close BTW panel"
-                    className="size-7 p-0"
-                    onClick={() => {
-                      setSelectedBranchId(null)
-                    }}
-                    size="icon"
-                    variant="ghost"
-                  >
-                    <Codicon name="close" />
-                  </Button>
-                )}
-              </div>
-
-              {branch?.source_excerpt && (
-                <blockquote className="mt-2 border-l-2 border-warning/50 pl-2 text-xs text-text-secondary">
-                  {branch.source_excerpt}
-                </blockquote>
-              )}
+          <section className={branch ? 'pt-1' : 'mt-5 rounded-lg border border-warning/40 bg-warning/5 p-3'}>
+              {!branch && <h3 className="text-sm font-semibold text-text-primary">BTW</h3>}
 
               {branch && (
-                <div aria-label="BTW conversation" className="mt-3 space-y-2">
+                <div aria-label="BTW conversation" className="mt-4 space-y-3">
                   {branch.messages.map((message, index) =>
                     message.role === 'assistant' ? (
-                      <div className="rounded-md bg-background/70 p-2.5" key={`${message.at}-${index}`}>
-                        <CompactMarkdown text={message.content} />
+                      <div className="flex justify-start" key={`${message.at}-${index}`}>
+                        <div className="max-w-[92%] rounded-2xl rounded-bl-sm border border-border/60 bg-background/80 px-3 py-2.5 shadow-sm">
+                          <CompactMarkdown className="text-[0.8125rem] text-text-primary" text={message.content} />
+                        </div>
                       </div>
                     ) : (
-                      <p
-                        className="ml-5 rounded-md bg-warning/10 px-2.5 py-2 text-xs leading-relaxed text-text-primary"
-                        key={`${message.at}-${index}`}
-                      >
-                        {message.content}
-                      </p>
+                      <div className="flex justify-end" key={`${message.at}-${index}`}>
+                        <p className="max-w-[85%] rounded-2xl rounded-br-sm bg-primary px-3 py-2 text-[0.8125rem] leading-relaxed text-primary-foreground shadow-sm">
+                          {message.content}
+                        </p>
+                      </div>
                     )
                   )}
                 </div>
-              )}
-
-              {branch?.connection && (
-                <p className="mt-3 text-xs leading-relaxed text-text-secondary">
-                  <strong>Connection:</strong> {branch?.connection}
-                </p>
               )}
 
               {(activeBranch || !branch) && (
@@ -293,6 +271,8 @@ export function LearningPanel({ gateway, onPrompt, sessionId }: LearningPanelPro
                 </form>
               )}
 
+              {branchError && <p className="mt-2 text-xs text-destructive">{branchError}</p>}
+
               {activeBranch ? (
                 <Button
                   className="mt-2 w-full"
@@ -310,16 +290,14 @@ export function LearningPanel({ gateway, onPrompt, sessionId }: LearningPanelPro
               ) : null}
             </section>
 
-          {thread.branches.length > 0 && (
+          {!branch && thread.branches.length > 0 && (
             <section className="mt-5">
               <div className="font-mondwest text-xs text-display text-text-tertiary">Question branches</div>
               <ul className="mt-2 space-y-1.5">
                 {thread.branches.map(item => (
                   <li key={item.id}>
                     <button
-                      className={`flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-xs ${
-                        branch?.id === item.id ? 'bg-primary/10 text-text-primary' : 'bg-muted/40 text-text-secondary'
-                      }`}
+                      className="flex w-full items-center gap-2 rounded-md bg-muted/40 px-2.5 py-2 text-left text-xs text-text-secondary"
                       onClick={() => setSelectedBranchId(item.id)}
                       type="button"
                     >
@@ -335,7 +313,7 @@ export function LearningPanel({ gateway, onPrompt, sessionId }: LearningPanelPro
         </div>
       )}
 
-      {expanded && (
+      {expanded && !branch && (
         <footer className="grid grid-cols-2 gap-2 border-t border-border/60 p-3">
           <Button onClick={() => void copyNote()} size="sm" variant="outline">
             <Codicon name="copy" /> Copy note

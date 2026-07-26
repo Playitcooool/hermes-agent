@@ -321,17 +321,8 @@ def materialize_learning_branch_fallback(
     try:
         if active and not question_recorded:
             state = store.open_branch(question=question, source_excerpt="active branch")
-        section_title = next(
-            (
-                item.get("title")
-                for item in state.get("sections", [])
-                if item.get("id") == state.get("active_section_id")
-            ),
-            "the current lesson",
-        )
         return store.answer_branch(
             content=answer,
-            connection=f"This clarifies {section_title}.",
         )
     except LearningThreadError:
         return store.load()

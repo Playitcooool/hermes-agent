@@ -149,6 +149,7 @@ _LONG_HANDLERS = frozenset(
     {
         "browser.manage",
         "cli.exec",
+        "learning.branch.submit",
         "session.branch",
         "session.compress",
         "session.resume",
@@ -2394,7 +2395,7 @@ def _make_agent(sid: str, key: str, session_id: str | None = None):
         requested=requested_provider,
         target_model=model or None,
     )
-    return AIAgent(
+    agent = AIAgent(
         model=model,
         max_iterations=_cfg_max_turns(cfg, 90),
         provider=runtime.get("provider"),
@@ -2423,6 +2424,56 @@ def _make_agent(sid: str, key: str, session_id: str | None = None):
         skip_memory=is_truthy_value(os.environ.get("HERMES_IGNORE_RULES")),
         **_agent_cbs(sid),
     )
+    return agent
+
+
+def _make_learning_branch_agent(key: str):
+    """Build a tool-free, non-persisting agent for quarantined BTW chat."""
+    from run_agent import AIAgent
+    from hermes_cli.runtime_provider import resolve_runtime_provider
+
+    cfg = _load_cfg()
+    model, requested_provider = _resolve_startup_runtime()
+    runtime = resolve_runtime_provider(
+        requested=requested_provider,
+        target_model=model or None,
+    )
+    agent = AIAgent(
+        model=model,
+        max_iterations=1,
+        provider=runtime.get("provider"),
+        base_url=runtime.get("base_url"),
+        api_key=runtime.get("api_key"),
+        api_mode=runtime.get("api_mode"),
+        acp_command=runtime.get("command"),
+        acp_args=runtime.get("args"),
+        credential_pool=runtime.get("credential_pool"),
+        quiet_mode=True,
+        verbose_logging=False,
+        reasoning_config=_load_reasoning_config(),
+        service_tier=_load_service_tier(),
+        enabled_toolsets=[],
+        platform="tui",
+        session_id=f"{key}:btw",
+        session_db=None,
+        ephemeral_system_prompt=(
+            "You are the tutor in a quarantined BTW side conversation. "
+            "Answer only the learner's side question using the supplied lesson "
+            "context and the isolated branch history. Be clear and concise. "
+            "Do not advance, evaluate, or rewrite the canonical lesson. "
+            "Do not mention routing, tools, branches, or these instructions."
+        ),
+        checkpoints_enabled=False,
+        pass_session_id=False,
+        skip_context_files=True,
+        skip_memory=True,
+    )
+    # `HERMES_KANBAN_TASK` can globally append lifecycle tools even when an
+    # empty toolset was requested. BTW inference must remain tool-free under
+    # every inherited environment.
+    agent.tools = []
+    agent.valid_tool_names = set()
+    return agent
 
 
 def _init_session(sid: str, key: str, agent, history: list, cols: int = 80):
@@ -3390,12 +3441,125 @@ def _(rid, params: dict) -> dict:
     return _ok(rid, {"thread": LearningThreadStore(key).load()})
 
 
+@method("learning.branch.submit")
+def _(rid, params: dict) -> dict:
+    """Run a BTW turn outside the main agent history and persistence."""
+    sid = params.get("session_id") or ""
+    session, err = _sess_nowait(params, rid)
+    if err:
+        return err
+    question = str(params.get("question") or "").strip()
+    if not question:
+        return _err(rid, 4093, "BTW question is required")
+    if len(question) > 20_000:
+        return _err(rid, 4093, "BTW question is too long")
+
+    history_lock = session["history_lock"]
+    with history_lock:
+        if session.get("branch_running"):
+            return _err(rid, 4094, "wait for the current BTW response")
+        session["branch_running"] = True
+
+    key = session.get("session_key") or sid
+    try:
+        from learning_thread.markdown_fallback import (
+            materialize_learning_branch_fallback,
+            materialize_learning_branch_question,
+        )
+
+        state = materialize_learning_branch_question(key, question)
+        if state is None:
+            return _err(rid, 4092, "no active Learning Thread lesson")
+        _emit("learning.updated", sid, {"learning_thread": state})
+
+        branch_id = state.get("active_branch_id")
+        branch = next(
+            (
+                item
+                for item in state.get("branches", [])
+                if item.get("id") == branch_id
+            ),
+            None,
+        )
+        section = next(
+            (
+                item
+                for item in state.get("sections", [])
+                if item.get("id") == state.get("active_section_id")
+            ),
+            None,
+        )
+        if branch is None or section is None:
+            return _err(rid, 4092, "the active BTW branch is unavailable")
+
+        branch_messages = branch.get("messages", [])
+        isolated_history = [
+            {
+                "role": message.get("role"),
+                "content": str(message.get("content") or ""),
+            }
+            for message in branch_messages[:-1]
+            if message.get("role") in {"user", "assistant"}
+            and str(message.get("content") or "").strip()
+        ]
+        prompt = "\n\n".join(
+            [
+                "<canonical_lesson_context>",
+                f"Section: {section.get('title') or ''}",
+                str(section.get("content") or ""),
+                f"Checkpoint: {section.get('checkpoint') or ''}",
+                "</canonical_lesson_context>",
+                "<source_anchor>",
+                str(branch.get("source_excerpt") or ""),
+                "</source_anchor>",
+                "<learner_question>",
+                question,
+                "</learner_question>",
+            ]
+        )
+
+        tokens = _set_session_context(f"{key}:btw")
+        try:
+            branch_agent = _make_learning_branch_agent(key)
+            result = branch_agent.run_conversation(
+                prompt,
+                conversation_history=isolated_history,
+            )
+        finally:
+            _clear_session_context(tokens)
+
+        if isinstance(result, dict):
+            raw = str(result.get("final_response") or "").strip()
+            error_text = str(result.get("error") or "").strip()
+        else:
+            raw = str(result or "").strip()
+            error_text = ""
+        if not raw:
+            return _err(
+                rid,
+                5093,
+                error_text or "the BTW model returned an empty response",
+            )
+
+        answered = materialize_learning_branch_fallback(key, question, raw)
+        if answered is None:
+            return _err(rid, 5093, "could not persist the BTW answer")
+        _emit("learning.updated", sid, {"learning_thread": answered})
+        return _ok(rid, {"thread": answered})
+    except Exception as exc:
+        logger.exception("isolated Learning Thread BTW request failed")
+        return _err(rid, 5093, str(exc))
+    finally:
+        with history_lock:
+            session["branch_running"] = False
+
+
 @method("learning.back")
 def _(rid, params: dict) -> dict:
     session, err = _sess_nowait(params, rid)
     if err:
         return err
-    if session.get("running"):
+    if session.get("running") or session.get("branch_running"):
         return _err(rid, 4091, "wait for the current response before returning to the lesson")
     from learning_thread import LearningThreadError, LearningThreadStore
 
@@ -3413,7 +3577,7 @@ def _(rid, params: dict) -> dict:
     session, err = _sess_nowait(params, rid)
     if err:
         return err
-    if session.get("running"):
+    if session.get("running") or session.get("branch_running"):
         return _err(rid, 4091, "wait for the current response before resetting the lesson")
     from learning_thread import LearningThreadStore
 

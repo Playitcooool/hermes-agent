@@ -45,16 +45,10 @@ afterEach(() => {
 
 describe('LearningPanel BTW side thread', () => {
   it('automatically creates an anchored branch from the panel input', async () => {
-    const onPrompt = vi.fn().mockResolvedValue(true)
+    const request = vi.fn().mockResolvedValue({ thread: baseThread })
     setLearningThread(baseThread)
 
-    render(
-      <LearningPanel
-        gateway={{ request: vi.fn() } as unknown as HermesGateway}
-        onPrompt={onPrompt}
-        sessionId="session-1"
-      />
-    )
+    render(<LearningPanel gateway={{ request } as unknown as HermesGateway} sessionId="session-1" />)
 
     expect(screen.queryByText('Lesson progress')).toBeNull()
     expect(screen.queryByText('Current section')).toBeNull()
@@ -62,10 +56,12 @@ describe('LearningPanel BTW side thread', () => {
     fireEvent.change(composer, { target: { value: 'Why does this save memory?' } })
     fireEvent.click(screen.getByRole('button', { name: 'Start BTW thread' }))
 
-    await waitFor(() => expect(onPrompt).toHaveBeenCalledOnce())
-    expect(onPrompt.mock.calls[0][0]).toContain(baseThread.sections[0].content)
-    expect(onPrompt.mock.calls[0][1]).toBe('BTW · Why does this save memory?')
-    expect(onPrompt.mock.calls[0][2]).toBeUndefined()
+    await waitFor(() =>
+      expect(request).toHaveBeenCalledWith('learning.branch.submit', {
+        session_id: 'session-1',
+        question: 'Why does this save memory?'
+      })
+    )
     expect(screen.queryByRole('button', { name: /Continue lesson/ })).toBeNull()
   })
 
@@ -82,13 +78,11 @@ describe('LearningPanel BTW side thread', () => {
   })
 
   it('keeps follow-ups in the active BTW composer on Enter', async () => {
-    const onPrompt = vi.fn().mockResolvedValue(true)
-    setLearningThread({
+    const activeThread: LearningThread = {
       ...baseThread,
       active_branch_id: 'branch-1',
       branches: [
         {
-          connection: 'Both concern lazy evaluation.',
           id: 'branch-1',
           messages: [
             { at: '2026-07-25T00:01:00Z', content: 'Why save memory?', role: 'user' },
@@ -104,23 +98,26 @@ describe('LearningPanel BTW side thread', () => {
         }
       ],
       status: 'branch'
-    })
+    }
+    const request = vi.fn().mockResolvedValue({ thread: activeThread })
+    setLearningThread(activeThread)
 
-    render(
-      <LearningPanel
-        gateway={{ request: vi.fn() } as unknown as HermesGateway}
-        onPrompt={onPrompt}
-        sessionId="session-1"
-      />
-    )
+    render(<LearningPanel gateway={{ request } as unknown as HermesGateway} sessionId="session-1" />)
+
+    expect(screen.queryByText('BTW thread')).toBeNull()
+    expect(screen.queryByText('yields one value at a time')).toBeNull()
+    expect(screen.queryByText(/Connection:/)).toBeNull()
+    expect(screen.getByLabelText('BTW conversation').textContent).toContain('Values are produced on demand.')
 
     const composer = screen.getByRole('textbox', { name: 'Follow up in BTW thread' })
     fireEvent.change(composer, { target: { value: 'What about an infinite stream?' } })
     fireEvent.keyDown(composer, { key: 'Enter', shiftKey: false })
 
-    await waitFor(() => expect(onPrompt).toHaveBeenCalledOnce())
-    expect(onPrompt.mock.calls[0][0]).toContain('active side branch')
-    expect(onPrompt.mock.calls[0][1]).toBe('BTW · What about an infinite stream?')
-    expect(onPrompt.mock.calls[0][2]).toBeUndefined()
+    await waitFor(() =>
+      expect(request).toHaveBeenCalledWith('learning.branch.submit', {
+        session_id: 'session-1',
+        question: 'What about an infinite stream?'
+      })
+    )
   })
 })

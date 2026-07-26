@@ -197,7 +197,6 @@ class LearningThreadStore:
                 "source_section_id": section["id"],
                 "source_excerpt": _clean(source_excerpt, "source_excerpt"),
                 "messages": [{"role": "user", "content": _clean(question, "question"), "at": _now()}],
-                "connection": None,
                 "misconception": None,
                 "resolution": None,
                 "status": "open",
@@ -207,14 +206,14 @@ class LearningThreadStore:
             state["status"] = "branch"
             return self._save(state)
 
-    def answer_branch(self, *, content: str, connection: str, misconception: str | None = None) -> dict[str, Any]:
+    def answer_branch(self, *, content: str, misconception: str | None = None) -> dict[str, Any]:
         with self._lock:
             state = self._require()
             branch = self._active_branch(state)
             if not branch:
                 raise LearningThreadError("no side branch is active")
             branch["messages"].append({"role": "assistant", "content": _clean(content, "content"), "at": _now()})
-            branch["connection"] = _clean(connection, "connection")
+            branch.pop("connection", None)
             branch["misconception"] = str(misconception).strip() if misconception else None
             return self._save(state)
 

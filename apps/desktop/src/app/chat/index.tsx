@@ -389,9 +389,6 @@ export function ChatView({
         </div>
         <LearningPanel
           gateway={gateway}
-          onPrompt={(text, displayText, forceTool) =>
-            onSubmit(text, { displayText, forceTool, sidePanel: true })
-          }
           sessionId={activeSessionId}
         />
       </div>

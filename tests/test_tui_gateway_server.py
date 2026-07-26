@@ -2645,6 +2645,136 @@ def test_learning_rpc_reads_and_returns_from_anchored_branch(monkeypatch):
     assert events[-1][0] == "learning.updated"
 
 
+def test_learning_branch_submit_uses_quarantined_history(monkeypatch, tmp_path):
+    from learning_thread import LearningThreadStore
+
+    monkeypatch.setenv("HERMES_HOME", str(tmp_path))
+    main_history = [
+        {"role": "user", "content": "Teach me generators."},
+        {"role": "assistant", "content": "Main lesson response."},
+    ]
+    main_agent = object()
+    server._sessions["sid"] = _session(agent=main_agent, history=main_history)
+    store = LearningThreadStore("session-key")
+    initial = store.start(
+        topic="Generators",
+        objective="Understand lazy iteration",
+        outline=[{"title": "Lazy values", "purpose": "Explain lazy values"}],
+        section_title="Lazy values",
+        content="A generator produces one value at a time.",
+        checkpoint="Why can this save memory?",
+    )
+    seen = []
+
+    class _BranchAgent:
+        def run_conversation(self, prompt, conversation_history=None):
+            seen.append(
+                {
+                    "prompt": prompt,
+                    "history": list(conversation_history or []),
+                }
+            )
+            return {"final_response": f"Isolated answer {len(seen)}."}
+
+    events = []
+    monkeypatch.setattr(server, "_make_learning_branch_agent", lambda _key: _BranchAgent())
+    monkeypatch.setattr(server, "_set_session_context", lambda _key: [])
+    monkeypatch.setattr(server, "_clear_session_context", lambda _tokens: None)
+    monkeypatch.setattr(server, "_emit", lambda *args: events.append(args))
+
+    try:
+        first = server.handle_request(
+            {
+                "id": "1",
+                "method": "learning.branch.submit",
+                "params": {
+                    "session_id": "sid",
+                    "question": "Why is that useful?",
+                },
+            }
+        )
+        second = server.handle_request(
+            {
+                "id": "2",
+                "method": "learning.branch.submit",
+                "params": {
+                    "session_id": "sid",
+                    "question": "Does it work for infinite streams?",
+                },
+            }
+        )
+    finally:
+        session = server._sessions.pop("sid", None)
+
+    assert first["result"]["thread"]["active_section_id"] == initial["active_section_id"]
+    messages = second["result"]["thread"]["branches"][-1]["messages"]
+    assert [message["role"] for message in messages] == [
+        "user",
+        "assistant",
+        "user",
+        "assistant",
+    ]
+    assert seen[0]["history"] == []
+    assert seen[1]["history"] == [
+        {"role": "user", "content": "Why is that useful?"},
+        {"role": "assistant", "content": "Isolated answer 1."},
+    ]
+    assert "A generator produces one value at a time." in seen[0]["prompt"]
+    assert session["history"] == main_history
+    assert session["agent"] is main_agent
+    assert session["branch_running"] is False
+    assert [event[0] for event in events] == [
+        "learning.updated",
+        "learning.updated",
+        "learning.updated",
+        "learning.updated",
+    ]
+
+
+def test_learning_branch_agent_is_absolutely_tool_free(monkeypatch):
+    import hermes_cli.runtime_provider as runtime_provider
+    import run_agent
+
+    captured = {}
+
+    class _Agent:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+            self.tools = [{"function": {"name": "kanban_complete"}}]
+            self.valid_tool_names = {"kanban_complete"}
+
+    monkeypatch.setattr(run_agent, "AIAgent", _Agent)
+    monkeypatch.setattr(
+        runtime_provider,
+        "resolve_runtime_provider",
+        lambda **_kwargs: {
+            "provider": "openai-codex",
+            "base_url": "https://example.invalid",
+            "api_key": "oauth",
+            "api_mode": "codex_responses",
+            "credential_pool": object(),
+        },
+    )
+    monkeypatch.setattr(server, "_load_cfg", lambda: {})
+    monkeypatch.setattr(
+        server,
+        "_resolve_startup_runtime",
+        lambda: ("test-model", "openai-codex"),
+    )
+    monkeypatch.setattr(server, "_load_reasoning_config", lambda: None)
+    monkeypatch.setattr(server, "_load_service_tier", lambda: None)
+
+    agent = server._make_learning_branch_agent("lesson-session")
+
+    assert captured["enabled_toolsets"] == []
+    assert captured["max_iterations"] == 1
+    assert captured["session_db"] is None
+    assert captured["skip_context_files"] is True
+    assert captured["skip_memory"] is True
+    assert agent.tools == []
+    assert agent.valid_tool_names == set()
+
+
 def test_learning_tool_completion_always_emits_structured_update(monkeypatch):
     events = []
     monkeypatch.setattr(server, "_emit", lambda *args: events.append(args))
