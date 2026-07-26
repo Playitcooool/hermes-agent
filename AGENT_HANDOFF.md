@@ -15,7 +15,7 @@ while `BTW` questions run as anchored side branches in the right panel.
 - Fork: `https://github.com/Playitcooool/hermes-agent`
 - Branch: `learning-thread-app`
 - Upstream: `https://github.com/NousResearch/hermes-agent.git`
-- Latest functional commit: `59acf7f4d`
+- Latest functional commit: `a7c46481c`
 
 Before changing distribution behavior, verify the remotes, worktree, and recent
 history:
@@ -51,6 +51,11 @@ git log --oneline -15
   removed.
 - Entering a question in the BTW input immediately creates a durable branch.
   Its user and assistant messages render only in the panel.
+- An open branch turns the rail into a dedicated chat view. The lesson outline,
+  branch list, source anchor, metadata, and footer controls stay out of the
+  conversation until the user returns to the lesson.
+- The branch question is the panel title. User turns render as right-aligned
+  bubbles and tutor turns as readable left-aligned Markdown bubbles.
 - Follow-ups stay in the active branch. **Back to lesson** preserves the branch
   as resolved/unresolved, restores the canonical lesson, and restores the main
   Continue control.
@@ -65,20 +70,23 @@ Load-bearing desktop files:
 - `apps/desktop/src/app/session/hooks/use-message-stream.ts`
 - `apps/desktop/src/store/learning.ts`
 
-### Deterministic BTW routing
+### Quarantined BTW requests
 
-BTW persistence does not depend on the model completing two tool calls:
+`learning.branch.submit` is a separate long-running RPC. It does not submit a
+hidden prompt through the main chat agent:
 
-1. A recognized side-panel request records the question before inference.
-2. The model returns a focused text answer without an inferred forced tool.
-3. The gateway persists that answer into the active branch and emits
+1. The question is recorded in durable branch state before inference.
+2. A fresh BTW agent receives only the canonical section context and prior
+   messages from that branch.
+3. The agent is non-persisting (`session_db=None`), skips memory and repository
+   context, has one model iteration, and is forcibly stripped of all tools.
+4. The gateway persists the focused answer into the active branch and emits
    `learning.updated`.
-4. Side-panel completion is discarded from the main transcript because the
-   durable branch is the rendering source.
+5. The main agent instance, main history, and main session database rows remain
+   untouched.
 
-The BTW branch fallback is evaluated before explicit lesson detection. This is
-important because the control marker contains “Learning Thread” and “lesson” and
-would otherwise be misclassified as a new structured lesson.
+Source anchors remain durable context but are not rendered. The former synthetic
+`connection` field has been removed from new state and tool output.
 
 ## Distribution
 
@@ -118,15 +126,16 @@ Always confirm `install-stamp.json` matches `git rev-parse HEAD` and has
 8. `b5183d9bb` — separate lesson and branch surfaces
 9. `5c7f75f67` — numbered-heading lesson fallback
 10. `59acf7f4d` — deterministic BTW replies and simplified right panel
+11. `a7c46481c` — quarantined BTW request and chat-style branch panel
 
 Earlier foundational commits remain in Git history.
 
 ## Verification
 
-Automated checks after the final BTW fix:
+Automated checks after the quarantined BTW change:
 
-- Focused Python Markdown/gateway checks: 10/10
-- Desktop learning panel/store tests: 14/14
+- Focused Python learning/gateway checks: 26/26
+- Desktop learning panel/store tests: 12/12
 - Desktop TypeScript type-check: passed
 - Production Vite/Electron package build: passed
 - `git diff --check`: passed
