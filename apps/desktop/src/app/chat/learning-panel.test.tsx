@@ -56,6 +56,8 @@ describe('LearningPanel BTW side thread', () => {
       />
     )
 
+    expect(screen.queryByText('Lesson progress')).toBeNull()
+    expect(screen.queryByText('Current section')).toBeNull()
     const composer = screen.getByRole('textbox', { name: 'Ask a BTW question' })
     fireEvent.change(composer, { target: { value: 'Why does this save memory?' } })
     fireEvent.click(screen.getByRole('button', { name: 'Start BTW thread' }))
@@ -63,7 +65,7 @@ describe('LearningPanel BTW side thread', () => {
     await waitFor(() => expect(onPrompt).toHaveBeenCalledOnce())
     expect(onPrompt.mock.calls[0][0]).toContain(baseThread.sections[0].content)
     expect(onPrompt.mock.calls[0][1]).toBe('BTW · Why does this save memory?')
-    expect(onPrompt.mock.calls[0][2]).toBe('learning_thread')
+    expect(onPrompt.mock.calls[0][2]).toBeUndefined()
     expect(screen.queryByRole('button', { name: /Continue lesson/ })).toBeNull()
   })
 
@@ -119,6 +121,6 @@ describe('LearningPanel BTW side thread', () => {
     await waitFor(() => expect(onPrompt).toHaveBeenCalledOnce())
     expect(onPrompt.mock.calls[0][0]).toContain('active side branch')
     expect(onPrompt.mock.calls[0][1]).toBe('BTW · What about an infinite stream?')
-    expect(onPrompt.mock.calls[0][2]).toBe('learning_thread')
+    expect(onPrompt.mock.calls[0][2]).toBeUndefined()
   })
 })

@@ -484,7 +484,6 @@ export function usePromptActions({
 
           await submitPromptText(submission.prompt, {
             displayText: submission.displayText,
-            forceTool: submission.forceTool,
             sidePanel: true
           })
 

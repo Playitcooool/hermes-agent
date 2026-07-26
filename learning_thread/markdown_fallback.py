@@ -228,6 +228,63 @@ def _panel_question(control_prompt: str) -> str:
     return next((chunk for chunk in reversed(chunks) if chunk), "")
 
 
+def materialize_learning_branch_question(
+    session_id: str,
+    control_prompt: str,
+) -> dict[str, Any] | None:
+    """Record a panel question before inference so its branch is deterministic."""
+    store = LearningThreadStore(session_id)
+    state = store.load()
+    question = _panel_question(control_prompt)
+    if state is None or not question:
+        return None
+
+    active_id = state.get("active_branch_id")
+    active = next(
+        (item for item in state.get("branches", []) if item.get("id") == active_id),
+        None,
+    )
+    if active:
+        messages = active.get("messages", [])
+        if (
+            messages
+            and messages[-1].get("role") == "user"
+            and messages[-1].get("content") == question
+        ):
+            return state
+        if (
+            len(messages) >= 2
+            and messages[-2].get("role") == "user"
+            and messages[-2].get("content") == question
+            and messages[-1].get("role") == "assistant"
+        ):
+            return state
+        source_excerpt = "active branch"
+    else:
+        section = next(
+            (
+                item
+                for item in state.get("sections", [])
+                if item.get("id") == state.get("active_section_id")
+            ),
+            None,
+        )
+        if section is None:
+            return None
+        source = str(section.get("content") or "").strip()
+        source_excerpt = source.split("\n\n", 1)[0][:500].strip()
+        if not source_excerpt:
+            return None
+
+    try:
+        return store.open_branch(
+            question=question,
+            source_excerpt=source_excerpt,
+        )
+    except LearningThreadError:
+        return store.load()
+
+
 def materialize_learning_branch_fallback(
     session_id: str,
     control_prompt: str,
@@ -235,7 +292,7 @@ def materialize_learning_branch_fallback(
 ) -> dict[str, Any] | None:
     """Record a panel question and answer when branch tool calls were omitted."""
     store = LearningThreadStore(session_id)
-    state = store.load()
+    state = materialize_learning_branch_question(session_id, control_prompt)
     question = _panel_question(control_prompt)
     answer = str(response_markdown or "").strip()
     if state is None or not question or not answer:
@@ -261,29 +318,8 @@ def materialize_learning_branch_fallback(
             and messages[-1].get("role") == "assistant"
         ):
             return state
-    else:
-        section = next(
-            (
-                item
-                for item in state.get("sections", [])
-                if item.get("id") == state.get("active_section_id")
-            ),
-            None,
-        )
-        if section is None:
-            return None
-        source = str(section.get("content") or "").strip()
-        source_excerpt = source.split("\n\n", 1)[0][:500].strip()
-        if not source_excerpt:
-            return None
-
     try:
-        if not active:
-            state = store.open_branch(
-                question=question,
-                source_excerpt=source_excerpt,
-            )
-        elif not question_recorded:
+        if active and not question_recorded:
             state = store.open_branch(question=question, source_excerpt="active branch")
         section_title = next(
             (

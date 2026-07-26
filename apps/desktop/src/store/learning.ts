@@ -97,8 +97,8 @@ export function buildLearningBranchPrompt(thread: LearningThread, rawQuestion: s
   if (activeBranch) {
     return [
       '[Learning Thread BTW side panel]',
-      'Record the following follow-up in the active side branch with learning_thread(action="branch_open"),',
-      'then answer it with learning_thread(action="branch_answer"). Do not advance or rewrite the canonical lesson.',
+      'Answer the following follow-up in the active side branch.',
+      'Do not advance or rewrite the canonical lesson. Return only the focused answer.',
       '',
       question
     ].join('\n')
@@ -109,10 +109,8 @@ export function buildLearningBranchPrompt(thread: LearningThread, rawQuestion: s
 
   return [
     '[Learning Thread BTW side panel]',
-    'Open a durable side branch for the following question. Select the relevant exact words from the supplied',
-    'current lesson section and pass them verbatim as source_excerpt to',
-    'learning_thread(action="branch_open"), then answer with learning_thread(action="branch_answer").',
-    'Do not advance or rewrite the canonical lesson.',
+    'Answer the following side question using the supplied current lesson section.',
+    'Do not advance or rewrite the canonical lesson. Return only the focused answer.',
     '',
     '<current_lesson_section>',
     sourceContent,
@@ -124,7 +122,6 @@ export function buildLearningBranchPrompt(thread: LearningThread, rawQuestion: s
 
 export interface LearningBtwSubmission {
   displayText: string
-  forceTool: 'learning_thread'
   prompt: string
 }
 
@@ -143,7 +140,6 @@ export function prepareLearningBtwSubmission(
 
   return {
     displayText: `BTW · ${question}`,
-    forceTool: 'learning_thread',
     prompt: buildLearningBranchPrompt(thread, question)
   }
 }

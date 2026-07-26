@@ -12,7 +12,6 @@ import {
   activeLearningBranch,
   activeLearningSection,
   buildLearningBranchPrompt,
-  learningProgress,
   type LearningThread,
   setLearningLoading,
   setLearningThread
@@ -27,12 +26,6 @@ interface LearningPanelProps {
 interface LearningMainControlsProps {
   onPrompt: (text: string, displayText?: string, forceTool?: string) => Promise<boolean> | boolean
 }
-
-const readinessLabels = {
-  understood: 'Understood',
-  mostly_understood: 'Mostly understood',
-  needs_clarification: 'Needs clarification'
-} as const
 
 function noteMarkdown(thread: LearningThread): string {
   const sections = thread.sections
@@ -93,10 +86,8 @@ export function LearningPanel({ gateway, onPrompt, sessionId }: LearningPanelPro
   const [selectedBranchId, setSelectedBranchId] = useState<null | string>(null)
   const [branchDraft, setBranchDraft] = useState('')
   const [branchSubmitting, setBranchSubmitting] = useState(false)
-  const section = thread ? activeLearningSection(thread) : null
   const activeBranch = thread ? activeLearningBranch(thread) : null
   const branch = thread?.branches.find(item => item.id === (activeBranch?.id ?? selectedBranchId)) ?? null
-  const progress = thread ? learningProgress(thread) : 0
 
   useEffect(() => {
     setSelectedBranchId(thread?.active_branch_id ?? null)
@@ -135,7 +126,7 @@ export function LearningPanel({ gateway, onPrompt, sessionId }: LearningPanelPro
     setBranchSubmitting(true)
 
     try {
-      const submitted = await onPrompt(instruction, `BTW · ${question}`, 'learning_thread')
+      const submitted = await onPrompt(instruction, `BTW · ${question}`)
 
       if (submitted) {
         setBranchDraft('')
@@ -199,16 +190,6 @@ export function LearningPanel({ gateway, onPrompt, sessionId }: LearningPanelPro
         <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
           <p className="text-xs leading-relaxed text-text-secondary">{thread.objective}</p>
 
-          <div className="mt-4">
-            <div className="mb-1.5 flex items-center justify-between text-xs text-text-tertiary">
-              <span>Lesson progress</span>
-              <span>{progress}%</span>
-            </div>
-            <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-              <div className="h-full rounded-full bg-primary transition-[width]" style={{ width: `${progress}%` }} />
-            </div>
-          </div>
-
           <ol aria-label="Lesson outline" className="mt-4 space-y-1">
             {thread.outline.map((item, index) => {
               const materialized = thread.sections[index]
@@ -236,15 +217,7 @@ export function LearningPanel({ gateway, onPrompt, sessionId }: LearningPanelPro
             })}
           </ol>
 
-          <section className="mt-5 rounded-lg border border-border/60 bg-background/50 p-3">
-            <div className="font-mondwest text-xs text-display text-text-tertiary">Current section</div>
-            <h3 className="mt-1 text-sm font-medium text-text-primary">{section?.title}</h3>
-            {section?.readiness && (
-              <div className="mt-2 text-xs text-text-secondary">{readinessLabels[section.readiness]}</div>
-            )}
-          </section>
-
-          <section className="mt-3 rounded-lg border border-warning/40 bg-warning/5 p-3">
+          <section className="mt-5 rounded-lg border border-warning/40 bg-warning/5 p-3">
               <div className="flex items-center justify-between gap-2">
                 <div>
                   <div className="font-mondwest text-xs text-display text-warning">BTW thread</div>
@@ -332,7 +305,7 @@ export function LearningPanel({ gateway, onPrompt, sessionId }: LearningPanelPro
                 </Button>
               ) : branch ? (
                 <Button className="mt-3 w-full" onClick={() => setSelectedBranchId(null)} size="sm" variant="outline">
-                  <Codicon name="arrow-left" /> Current section
+                  <Codicon name="close" /> Close branch
                 </Button>
               ) : null}
             </section>

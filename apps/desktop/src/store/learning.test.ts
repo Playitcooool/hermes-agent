@@ -105,7 +105,8 @@ describe('learning BTW prompts', () => {
 
     expect(prompt).toContain('[Learning Thread BTW side panel]')
     expect(prompt).toContain(value.sections[0].content)
-    expect(prompt).toContain('learning_thread(action="branch_open")')
+    expect(prompt).toContain('Return only the focused answer')
+    expect(prompt).not.toContain('learning_thread(action=')
     expect(prompt).toContain('Why does this save memory?')
   })
 
@@ -128,8 +129,7 @@ describe('learning BTW prompts', () => {
       'usage: /btw <question>'
     )
     expect(prepareLearningBtwSubmission(value, '  Why does this save memory? ')).toMatchObject({
-      displayText: 'BTW · Why does this save memory?',
-      forceTool: 'learning_thread'
+      displayText: 'BTW · Why does this save memory?'
     })
   })
 })

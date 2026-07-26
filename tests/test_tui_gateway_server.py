@@ -3150,7 +3150,7 @@ def test_prompt_submit_history_version_match_persists_normally(monkeypatch):
         server._sessions.pop("sid", None)
 
 
-def test_prompt_submit_persists_display_text_but_sends_model_instruction(monkeypatch):
+def test_prompt_submit_persists_display_text_but_sends_model_instruction(monkeypatch, tmp_path):
     """Side-panel control text stays model-only across session resume."""
 
     seen = {}
@@ -3184,6 +3184,20 @@ def test_prompt_submit_persists_display_text_but_sends_model_instruction(monkeyp
             self._target()
 
     events = []
+    monkeypatch.setenv("HERMES_HOME", str(tmp_path))
+    from learning_thread import LearningThreadStore
+
+    LearningThreadStore("session-key").start(
+        topic="Generators",
+        objective="Understand lazy iteration",
+        outline=[
+            {"title": "Lazy iteration", "purpose": "Understand lazy values"},
+            {"title": "Composition", "purpose": "Compose generators"},
+        ],
+        section_title="Lazy iteration",
+        content="A generator produces one value at a time.",
+        checkpoint="Why can this save memory?",
+    )
     server._sessions["sid"] = _session(agent=_Agent())
     try:
         monkeypatch.setattr(server.threading, "Thread", _ImmediateThread)
@@ -3201,18 +3215,23 @@ def test_prompt_submit_persists_display_text_but_sends_model_instruction(monkeyp
                 "method": "prompt.submit",
                 "params": {
                     "session_id": "sid",
-                    "text": "[internal branch routing]\nWhy?",
+                    "text": (
+                        "[Learning Thread BTW side panel]\n\n"
+                        "<current_lesson_section>\n"
+                        "A generator produces one value at a time.\n"
+                        "</current_lesson_section>\n\n"
+                        "Why?"
+                    ),
                     "display_text": "BTW · Why?",
-                    "force_tool": "learning_thread",
                     "side_panel": True,
                 },
             }
         )
 
         assert resp.get("result")
-        assert seen["prompt"] == "[internal branch routing]\nWhy?"
+        assert seen["prompt"].startswith("[Learning Thread BTW side panel]")
         assert seen["persist_user_message"] == "BTW · Why?"
-        assert seen["force_tool"] == "learning_thread"
+        assert seen["force_tool"] is None
         assert server._sessions["sid"]["history"][0] == {
             "role": "user",
             "content": "BTW · Why?",
@@ -3220,6 +3239,11 @@ def test_prompt_submit_persists_display_text_but_sends_model_instruction(monkeyp
         for event_name in ("message.start", "message.delta", "message.complete"):
             payload = next(payload for name, _sid, payload in events if name == event_name)
             assert payload["side_panel"] is True
+        updates = [payload for name, _sid, payload in events if name == "learning.updated"]
+        assert len(updates) == 2
+        messages = updates[-1]["learning_thread"]["branches"][-1]["messages"]
+        assert [message["role"] for message in messages] == ["user", "assistant"]
+        assert messages[-1]["content"] == "branch answer"
     finally:
         server._sessions.pop("sid", None)
 

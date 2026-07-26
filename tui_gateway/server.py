@@ -4014,10 +4014,19 @@ def _(rid, params: dict) -> dict:
         requested_force_tool, str
     ):
         return _err(rid, 4004, "force_tool must be a string")
-    force_tool = _prompt_force_tool(text, requested_force_tool)
     side_panel = params.get("side_panel", False)
     if not isinstance(side_panel, bool):
         return _err(rid, 4004, "side_panel must be a boolean")
+    is_learning_side_panel = (
+        side_panel
+        and isinstance(text, str)
+        and "[Learning Thread BTW side panel]" in text
+    )
+    force_tool = (
+        None
+        if is_learning_side_panel and requested_force_tool is None
+        else _prompt_force_tool(text, requested_force_tool)
+    )
     truncate_user_ordinal = params.get("truncate_before_user_ordinal")
     session, err = _sess_nowait(params, rid)
     if err:
@@ -4251,6 +4260,32 @@ def _run_prompt_submit(
             _start_inflight_turn(session, text)
     agent = session["agent"]
     session["side_panel_turn"] = side_panel
+    if (
+        side_panel
+        and isinstance(text, str)
+        and "[Learning Thread BTW side panel]" in text
+    ):
+        try:
+            from learning_thread.markdown_fallback import (
+                materialize_learning_branch_question,
+            )
+
+            branch_state = materialize_learning_branch_question(
+                session.get("session_key") or sid,
+                text,
+            )
+            if branch_state is not None:
+                _emit(
+                    "learning.updated",
+                    sid,
+                    {"learning_thread": branch_state},
+                )
+        except Exception as exc:
+            logger.warning(
+                "Learning Thread branch question fallback failed for session %s: %s",
+                session.get("session_key") or sid,
+                exc,
+            )
     learning_sections_before = None
     if (
         isinstance(text, str)
@@ -4498,10 +4533,13 @@ def _run_prompt_submit(
                     )
 
                     fallback_state = None
-                    if is_explicit_learning_thread_lesson(text):
-                        fallback_state = materialize_structured_lesson_fallback(
+                    if (
+                        isinstance(text, str)
+                        and "[Learning Thread BTW side panel]" in text
+                    ):
+                        fallback_state = materialize_learning_branch_fallback(
                             session.get("session_key") or sid,
-                            str(text),
+                            text,
                             raw,
                         )
                     elif (
@@ -4513,13 +4551,10 @@ def _run_prompt_submit(
                             raw,
                             previous_section_count=learning_sections_before,
                         )
-                    elif (
-                        isinstance(text, str)
-                        and "[Learning Thread BTW side panel]" in text
-                    ):
-                        fallback_state = materialize_learning_branch_fallback(
+                    elif is_explicit_learning_thread_lesson(text):
+                        fallback_state = materialize_structured_lesson_fallback(
                             session.get("session_key") or sid,
-                            text,
+                            str(text),
                             raw,
                         )
                     if fallback_state is not None:

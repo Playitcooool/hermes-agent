@@ -1,5 +1,6 @@
 from learning_thread.markdown_fallback import (
     materialize_learning_branch_fallback,
+    materialize_learning_branch_question,
     materialize_lesson_continuation_fallback,
     materialize_structured_lesson_fallback,
     parse_structured_lesson_markdown,
@@ -146,6 +147,40 @@ Why is pausing useful?""",
     branch = branched["branches"][-1]
     assert branch["messages"][-2]["content"] == "Why is pausing useful?"
     assert branch["messages"][-1]["role"] == "assistant"
+
+
+def test_materializes_panel_question_before_its_answer(tmp_path, monkeypatch):
+    monkeypatch.setenv("HERMES_HOME", str(tmp_path))
+    first = materialize_structured_lesson_fallback(
+        "session-panel",
+        "Teach me generators",
+        LESSON,
+    )
+    assert first is not None
+    prompt = (
+        "[Learning Thread BTW side panel]\n\n"
+        "<current_lesson_section>\n"
+        "A generator produces values one at a time.\n"
+        "</current_lesson_section>\n\n"
+        "Why is this useful?"
+    )
+
+    opened = materialize_learning_branch_question("session-panel", prompt)
+    answered = materialize_learning_branch_fallback(
+        "session-panel",
+        prompt,
+        "It avoids materializing every value up front.",
+    )
+
+    assert opened is not None
+    assert [message["role"] for message in opened["branches"][-1]["messages"]] == [
+        "user"
+    ]
+    assert answered is not None
+    assert [message["role"] for message in answered["branches"][-1]["messages"]] == [
+        "user",
+        "assistant",
+    ]
 
 
 def test_continuation_fallback_does_not_advance_after_tool_success(
