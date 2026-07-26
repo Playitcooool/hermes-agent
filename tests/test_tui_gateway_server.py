@@ -2693,12 +2693,15 @@ def test_learning_branch_submit_uses_quarantined_history(monkeypatch, tmp_path):
                 },
             }
         )
+        branch_id = first["result"]["thread"]["active_branch_id"]
+        store.back()
         second = server.handle_request(
             {
                 "id": "2",
                 "method": "learning.branch.submit",
                 "params": {
                     "session_id": "sid",
+                    "branch_id": branch_id,
                     "question": "Does it work for infinite streams?",
                 },
             }
@@ -2707,6 +2710,7 @@ def test_learning_branch_submit_uses_quarantined_history(monkeypatch, tmp_path):
         session = server._sessions.pop("sid", None)
 
     assert first["result"]["thread"]["active_section_id"] == initial["active_section_id"]
+    assert second["result"]["thread"]["active_branch_id"] == branch_id
     messages = second["result"]["thread"]["branches"][-1]["messages"]
     assert [message["role"] for message in messages] == [
         "user",

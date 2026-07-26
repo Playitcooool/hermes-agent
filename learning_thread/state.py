@@ -217,6 +217,30 @@ class LearningThreadStore:
             branch["misconception"] = str(misconception).strip() if misconception else None
             return self._save(state)
 
+    def activate_branch(self, branch_id: str) -> dict[str, Any]:
+        """Reopen a historical branch without changing the lesson cursor."""
+        with self._lock:
+            state = self._require()
+            target_id = _clean(branch_id, "branch_id")
+            active = self._active_branch(state)
+            if active and active.get("id") != target_id:
+                raise LearningThreadError("return from the active side branch before opening another")
+            branch = next(
+                (
+                    item
+                    for item in state.get("branches", [])
+                    if item.get("id") == target_id
+                ),
+                None,
+            )
+            if branch is None:
+                raise LearningThreadError("the requested side branch does not exist")
+            branch["status"] = "open"
+            branch["resolution"] = None
+            state["active_branch_id"] = target_id
+            state["status"] = "branch"
+            return self._save(state)
+
     def back(self, *, resolution: str | None = None) -> dict[str, Any]:
         with self._lock:
             state = self._require()

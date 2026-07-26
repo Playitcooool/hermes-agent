@@ -65,6 +65,12 @@ def test_branch_returns_to_exact_canonical_section_without_advancing(store):
     assert branch["status"] == "resolved"
     assert branch["source_section_id"] == section_id
 
+    state = store.activate_branch(branch_id)
+    assert state["active_branch_id"] == branch_id
+    assert state["active_section_id"] == section_id
+    assert state["branches"][0]["status"] == "open"
+    assert state["branches"][0]["resolution"] is None
+
 
 def test_invalid_transitions_do_not_rewrite_saved_state(store):
     original = start(store)

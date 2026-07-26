@@ -116,7 +116,55 @@ describe('LearningPanel BTW side thread', () => {
     await waitFor(() =>
       expect(request).toHaveBeenCalledWith('learning.branch.submit', {
         session_id: 'session-1',
+        branch_id: 'branch-1',
         question: 'What about an infinite stream?'
+      })
+    )
+  })
+
+  it('continues a historical question branch after selecting it', async () => {
+    const historicalThread: LearningThread = {
+      ...baseThread,
+      active_branch_id: null,
+      branches: [
+        {
+          id: 'branch-old',
+          messages: [
+            { at: '2026-07-25T00:01:00Z', content: 'Why save memory?', role: 'user' },
+            { at: '2026-07-25T00:02:00Z', content: 'Values are produced on demand.', role: 'assistant' }
+          ],
+          misconception: null,
+          question: 'Why save memory?',
+          resolution: null,
+          source_excerpt: 'yields one value at a time',
+          source_section_id: 'section-1',
+          status: 'unresolved',
+          title: 'Why save memory?'
+        }
+      ],
+      status: 'checkpoint'
+    }
+    const request = vi.fn().mockResolvedValue({
+      thread: {
+        ...historicalThread,
+        active_branch_id: 'branch-old',
+        status: 'branch'
+      }
+    })
+    setLearningThread(historicalThread)
+
+    render(<LearningPanel gateway={{ request } as unknown as HermesGateway} sessionId="session-1" />)
+    fireEvent.click(screen.getByRole('button', { name: /Why save memory.*unresolved/ }))
+
+    const composer = screen.getByRole('textbox', { name: 'Follow up in BTW thread' })
+    fireEvent.change(composer, { target: { value: 'Can I keep asking here?' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Send follow-up' }))
+
+    await waitFor(() =>
+      expect(request).toHaveBeenCalledWith('learning.branch.submit', {
+        session_id: 'session-1',
+        branch_id: 'branch-old',
+        question: 'Can I keep asking here?'
       })
     )
   })

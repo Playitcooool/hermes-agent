@@ -3462,10 +3462,18 @@ def _(rid, params: dict) -> dict:
 
     key = session.get("session_key") or sid
     try:
+        from learning_thread import LearningThreadStore
         from learning_thread.markdown_fallback import (
             materialize_learning_branch_fallback,
             materialize_learning_branch_question,
         )
+
+        requested_branch_id = str(params.get("branch_id") or "").strip()
+        if requested_branch_id:
+            try:
+                LearningThreadStore(key).activate_branch(requested_branch_id)
+            except Exception as exc:
+                return _err(rid, 4092, str(exc))
 
         state = materialize_learning_branch_question(key, question)
         if state is None:

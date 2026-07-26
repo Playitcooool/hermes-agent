@@ -116,7 +116,7 @@ export function LearningPanel({ gateway, sessionId }: LearningPanelProps) {
     event?.preventDefault()
     const question = branchDraft.trim()
 
-    if (!gateway || !sessionId || !question || branchSubmitting || loading || (branch && !activeBranch)) {
+    if (!gateway || !sessionId || !question || branchSubmitting || loading) {
       return
     }
 
@@ -126,7 +126,8 @@ export function LearningPanel({ gateway, sessionId }: LearningPanelProps) {
     try {
       const result = await gateway.request<{ thread: LearningThread }>('learning.branch.submit', {
         session_id: sessionId,
-        question
+        question,
+        ...(branch && { branch_id: branch.id })
       })
       setLearningThread(result.thread)
       setBranchDraft('')
@@ -249,14 +250,13 @@ export function LearningPanel({ gateway, sessionId }: LearningPanelProps) {
                 </div>
               )}
 
-              {(activeBranch || !branch) && (
-                <form className="mt-3 space-y-2" onSubmit={event => void submitBranchQuestion(event)}>
+              <form className="mt-3 space-y-2" onSubmit={event => void submitBranchQuestion(event)}>
                   <Textarea
-                    aria-label={activeBranch ? 'Follow up in BTW thread' : 'Ask a BTW question'}
+                    aria-label={branch ? 'Follow up in BTW thread' : 'Ask a BTW question'}
                     disabled={branchSubmitting || loading}
                     onChange={event => setBranchDraft(event.target.value)}
                     onKeyDown={handleBranchKeyDown}
-                    placeholder={activeBranch ? 'Follow up here…' : 'Ask a side question…'}
+                    placeholder={branch ? 'Continue this branch…' : 'Ask a side question…'}
                     rows={3}
                     value={branchDraft}
                   />
@@ -266,10 +266,9 @@ export function LearningPanel({ gateway, sessionId }: LearningPanelProps) {
                     size="sm"
                     type="submit"
                   >
-                    <Codicon name="send" /> {activeBranch ? 'Send follow-up' : 'Start BTW thread'}
+                    <Codicon name="send" /> {branch ? 'Send follow-up' : 'Start BTW thread'}
                   </Button>
-                </form>
-              )}
+              </form>
 
               {branchError && <p className="mt-2 text-xs text-destructive">{branchError}</p>}
 
