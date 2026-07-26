@@ -15,7 +15,7 @@ while `BTW` questions run as anchored side branches in the right panel.
 - Fork: `https://github.com/Playitcooool/hermes-agent`
 - Branch: `learning-thread-app`
 - Upstream: `https://github.com/NousResearch/hermes-agent.git`
-- Latest functional commit: `a7c46481c`
+- Latest functional commit: `871e9fece`
 
 Before changing distribution behavior, verify the remotes, worktree, and recent
 history:
@@ -59,6 +59,9 @@ git log --oneline -15
 - Follow-ups stay in the active branch. **Back to lesson** preserves the branch
   as resolved/unresolved, restores the canonical lesson, and restores the main
   Continue control.
+- Historical branches are resumable: selecting one shows its chat and composer;
+  sending the next message durably reopens that exact branch and continues with
+  only its isolated message history.
 - Side-panel stream, reasoning, and tool events never leak into the main
   transcript.
 
@@ -127,6 +130,7 @@ Always confirm `install-stamp.json` matches `git rev-parse HEAD` and has
 9. `5c7f75f67` — numbered-heading lesson fallback
 10. `59acf7f4d` — deterministic BTW replies and simplified right panel
 11. `a7c46481c` — quarantined BTW request and chat-style branch panel
+12. `871e9fece` — resumable historical BTW branches
 
 Earlier foundational commits remain in Git history.
 
