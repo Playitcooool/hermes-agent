@@ -3461,6 +3461,7 @@ def _(rid, params: dict) -> dict:
         session["branch_running"] = True
 
     key = session.get("session_key") or sid
+    event_branch_id = ""
     try:
         from learning_thread import LearningThreadStore
         from learning_thread.markdown_fallback import (
@@ -3499,6 +3500,8 @@ def _(rid, params: dict) -> dict:
         )
         if branch is None or section is None:
             return _err(rid, 4092, "the active BTW branch is unavailable")
+        event_branch_id = str(branch_id)
+        _emit("learning.branch.start", sid, {"branch_id": event_branch_id})
 
         branch_messages = branch.get("messages", [])
         isolated_history = [
@@ -3529,10 +3532,38 @@ def _(rid, params: dict) -> dict:
         tokens = _set_session_context(f"{key}:btw")
         try:
             branch_agent = _make_learning_branch_agent(key)
+            stream_buffer: list[str] = []
+            last_stream_emit = 0.0
+
+            def _flush_branch_stream():
+                nonlocal last_stream_emit
+                if not stream_buffer:
+                    return
+                text = "".join(stream_buffer)
+                stream_buffer.clear()
+                last_stream_emit = time.monotonic()
+                _emit(
+                    "learning.branch.delta",
+                    sid,
+                    {"branch_id": event_branch_id, "text": text},
+                )
+
+            def _stream_branch(delta):
+                nonlocal last_stream_emit
+                text = str(delta or "")
+                if not text:
+                    return
+                stream_buffer.append(text)
+                now = time.monotonic()
+                if not last_stream_emit or now - last_stream_emit >= 1 / 30:
+                    _flush_branch_stream()
+
             result = branch_agent.run_conversation(
                 prompt,
                 conversation_history=isolated_history,
+                stream_callback=_stream_branch,
             )
+            _flush_branch_stream()
         finally:
             _clear_session_context(tokens)
 
@@ -3543,6 +3574,11 @@ def _(rid, params: dict) -> dict:
             raw = str(result or "").strip()
             error_text = ""
         if not raw:
+            _emit(
+                "learning.branch.error",
+                sid,
+                {"branch_id": event_branch_id},
+            )
             return _err(
                 rid,
                 5093,
@@ -3551,11 +3587,27 @@ def _(rid, params: dict) -> dict:
 
         answered = materialize_learning_branch_fallback(key, question, raw)
         if answered is None:
+            _emit(
+                "learning.branch.error",
+                sid,
+                {"branch_id": event_branch_id},
+            )
             return _err(rid, 5093, "could not persist the BTW answer")
         _emit("learning.updated", sid, {"learning_thread": answered})
+        _emit(
+            "learning.branch.complete",
+            sid,
+            {"branch_id": event_branch_id},
+        )
         return _ok(rid, {"thread": answered})
     except Exception as exc:
         logger.exception("isolated Learning Thread BTW request failed")
+        if event_branch_id:
+            _emit(
+                "learning.branch.error",
+                sid,
+                {"branch_id": event_branch_id},
+            )
         return _err(rid, 5093, str(exc))
     finally:
         with history_lock:

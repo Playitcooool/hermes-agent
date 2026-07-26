@@ -2,7 +2,14 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { HermesGateway } from '@/hermes'
-import { setLearningLoading, setLearningThread, type LearningThread } from '@/store/learning'
+import {
+  appendLearningBranchStream,
+  clearLearningBranchStream,
+  setLearningLoading,
+  setLearningThread,
+  startLearningBranchStream,
+  type LearningThread
+} from '@/store/learning'
 
 import { LearningMainControls, LearningPanel } from './learning-panel'
 
@@ -39,6 +46,8 @@ const baseThread: LearningThread = {
 
 afterEach(() => {
   cleanup()
+  vi.restoreAllMocks()
+  clearLearningBranchStream()
   setLearningLoading(false)
   setLearningThread(null)
 })
@@ -154,7 +163,12 @@ describe('LearningPanel BTW side thread', () => {
     setLearningThread(historicalThread)
 
     render(<LearningPanel gateway={{ request } as unknown as HermesGateway} sessionId="session-1" />)
-    fireEvent.click(screen.getByRole('button', { name: /Why save memory.*unresolved/ }))
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Question branches (1)' }), {
+      button: 0,
+      ctrlKey: false,
+      pointerType: 'mouse'
+    })
+    fireEvent.click(await screen.findByRole('menuitem', { name: /Why save memory.*unresolved/ }))
 
     const composer = screen.getByRole('textbox', { name: 'Follow up in BTW thread' })
     fireEvent.change(composer, { target: { value: 'Can I keep asking here?' } })
@@ -167,5 +181,63 @@ describe('LearningPanel BTW side thread', () => {
         question: 'Can I keep asking here?'
       })
     )
+  })
+
+  it('follows streamed tokens until the user scrolls away, then resumes at bottom', async () => {
+    const activeThread: LearningThread = {
+      ...baseThread,
+      active_branch_id: 'branch-stream',
+      branches: [
+        {
+          id: 'branch-stream',
+          messages: [
+            { at: '2026-07-25T00:01:00Z', content: 'Explain streams.', role: 'user' },
+            { at: '2026-07-25T00:02:00Z', content: 'A prior answer.', role: 'assistant' }
+          ],
+          misconception: null,
+          question: 'Explain streams.',
+          resolution: null,
+          source_excerpt: 'one value at a time',
+          source_section_id: 'section-1',
+          status: 'open',
+          title: 'Explain streams'
+        }
+      ],
+      status: 'branch'
+    }
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation(callback => {
+      return window.setTimeout(() => callback(0), 0)
+    })
+    vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(handle => window.clearTimeout(handle))
+    setLearningThread(activeThread)
+
+    render(
+      <LearningPanel
+        gateway={{ request: vi.fn().mockResolvedValue({ thread: activeThread }) } as unknown as HermesGateway}
+        sessionId="session-1"
+      />
+    )
+
+    const viewport = screen.getByLabelText('BTW messages')
+    let scrollHeight = 1_000
+    Object.defineProperty(viewport, 'scrollHeight', { configurable: true, get: () => scrollHeight })
+    Object.defineProperty(viewport, 'clientHeight', { configurable: true, get: () => 200 })
+
+    await waitFor(() => expect(viewport.scrollTop).toBe(800))
+    fireEvent.scroll(viewport)
+    viewport.scrollTop = 400
+    fireEvent.scroll(viewport)
+
+    startLearningBranchStream('branch-stream')
+    appendLearningBranchStream('branch-stream', 'Streaming answer')
+    await waitFor(() => expect(screen.getByText('Streaming answer')).not.toBeNull())
+    expect(viewport.scrollTop).toBe(400)
+    expect(screen.getByRole('button', { name: 'Jump to latest BTW message' })).not.toBeNull()
+
+    viewport.scrollTop = 800
+    fireEvent.scroll(viewport)
+    scrollHeight = 1_200
+    appendLearningBranchStream('branch-stream', ' continues')
+    await waitFor(() => expect(viewport.scrollTop).toBe(1_000))
   })
 })

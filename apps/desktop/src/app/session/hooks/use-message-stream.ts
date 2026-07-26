@@ -17,7 +17,13 @@ import { coerceGatewayText, coerceThinkingText, normalizePersonalityValue } from
 import { triggerHaptic } from '@/lib/haptics'
 import { isProviderSetupErrorMessage } from '@/lib/provider-setup-errors'
 import { setClarifyRequest } from '@/store/clarify'
-import { type LearningThread, setLearningThread } from '@/store/learning'
+import {
+  appendLearningBranchStream,
+  clearLearningBranchStream,
+  type LearningThread,
+  setLearningThread,
+  startLearningBranchStream
+} from '@/store/learning'
 import { notify } from '@/store/notifications'
 import { requestDesktopOnboarding } from '@/store/onboarding'
 import { clearAllPrompts, setApprovalRequest, setSecretRequest, setSudoRequest } from '@/store/prompts'
@@ -710,7 +716,32 @@ export function useMessageStream({
       } else if (event.type === 'learning.updated') {
         if (isActiveEvent) {
           const thread = payload?.learning_thread
-          setLearningThread(thread && typeof thread === 'object' ? (thread as LearningThread) : null)
+          const nextThread = thread && typeof thread === 'object' ? (thread as LearningThread) : null
+          setLearningThread(nextThread)
+          const activeBranch = nextThread?.branches.find(
+            branch => branch.id === nextThread.active_branch_id
+          )
+          if (activeBranch?.messages.at(-1)?.role === 'assistant') {
+            clearLearningBranchStream(activeBranch.id)
+          }
+        }
+      } else if (event.type === 'learning.branch.start') {
+        if (isActiveEvent && typeof payload?.branch_id === 'string') {
+          startLearningBranchStream(payload.branch_id)
+        }
+      } else if (event.type === 'learning.branch.delta') {
+        if (
+          isActiveEvent &&
+          typeof payload?.branch_id === 'string' &&
+          typeof payload?.text === 'string'
+        ) {
+          appendLearningBranchStream(payload.branch_id, payload.text)
+        }
+      } else if (event.type === 'learning.branch.complete' || event.type === 'learning.branch.error') {
+        if (isActiveEvent) {
+          clearLearningBranchStream(
+            typeof payload?.branch_id === 'string' ? payload.branch_id : undefined
+          )
         }
       } else if (event.type === 'message.start') {
         if (!sessionId) {

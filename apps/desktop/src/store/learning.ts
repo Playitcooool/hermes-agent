@@ -56,6 +56,11 @@ export interface LearningThread {
 
 export const $learningThread = atom<LearningThread | null>(null)
 export const $learningLoading = atom(false)
+export interface LearningBranchStream {
+  branchId: string
+  text: string
+}
+export const $learningBranchStream = atom<LearningBranchStream | null>(null)
 
 export function setLearningThread(thread: LearningThread | null) {
   $learningThread.set(thread)
@@ -63,6 +68,26 @@ export function setLearningThread(thread: LearningThread | null) {
 
 export function setLearningLoading(loading: boolean) {
   $learningLoading.set(loading)
+}
+
+export function startLearningBranchStream(branchId: string) {
+  $learningBranchStream.set({ branchId, text: '' })
+}
+
+export function appendLearningBranchStream(branchId: string, delta: string) {
+  const current = $learningBranchStream.get()
+  $learningBranchStream.set({
+    branchId,
+    text: current?.branchId === branchId ? current.text + delta : delta
+  })
+}
+
+export function clearLearningBranchStream(branchId?: string) {
+  const current = $learningBranchStream.get()
+
+  if (!branchId || current?.branchId === branchId) {
+    $learningBranchStream.set(null)
+  }
 }
 
 export function activeLearningSection(thread: LearningThread): LearningSection | null {

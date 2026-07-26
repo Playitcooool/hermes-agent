@@ -2667,13 +2667,20 @@ def test_learning_branch_submit_uses_quarantined_history(monkeypatch, tmp_path):
     seen = []
 
     class _BranchAgent:
-        def run_conversation(self, prompt, conversation_history=None):
+        def run_conversation(
+            self,
+            prompt,
+            conversation_history=None,
+            stream_callback=None,
+        ):
             seen.append(
                 {
                     "prompt": prompt,
                     "history": list(conversation_history or []),
                 }
             )
+            stream_callback(f"Isolated answer {len(seen)}")
+            stream_callback(".")
             return {"final_response": f"Isolated answer {len(seen)}."}
 
     events = []
@@ -2729,10 +2736,30 @@ def test_learning_branch_submit_uses_quarantined_history(monkeypatch, tmp_path):
     assert session["branch_running"] is False
     assert [event[0] for event in events] == [
         "learning.updated",
+        "learning.branch.start",
+        "learning.branch.delta",
+        "learning.branch.delta",
         "learning.updated",
+        "learning.branch.complete",
         "learning.updated",
+        "learning.branch.start",
+        "learning.branch.delta",
+        "learning.branch.delta",
         "learning.updated",
+        "learning.branch.complete",
     ]
+    assert [
+        event[2]["text"]
+        for event in events
+        if event[0] == "learning.branch.delta"
+    ] == [
+        "Isolated answer 1",
+        ".",
+        "Isolated answer 2",
+        ".",
+    ]
+    assert [event[0] for event in events].count("learning.branch.start") == 2
+    assert [event[0] for event in events].count("learning.branch.complete") == 2
 
 
 def test_learning_branch_agent_is_absolutely_tool_free(monkeypatch):

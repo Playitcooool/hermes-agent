@@ -1,10 +1,14 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  $learningBranchStream,
   activeLearningBranch,
   activeLearningSection,
+  appendLearningBranchStream,
+  clearLearningBranchStream,
   learningProgress,
   prepareLearningBtwSubmission,
+  startLearningBranchStream,
   shouldStartLearningThread,
   type LearningThread
 } from './learning'
@@ -108,5 +112,26 @@ describe('learning BTW requests', () => {
     expect(prepareLearningBtwSubmission(value, '  Why does this save memory? ')).toMatchObject({
       question: 'Why does this save memory?'
     })
+  })
+
+  it('accumulates only the active isolated branch stream', () => {
+    startLearningBranchStream('branch-1')
+    appendLearningBranchStream('branch-1', 'Hello')
+    appendLearningBranchStream('branch-1', ' world')
+    expect($learningBranchStream.get()).toEqual({
+      branchId: 'branch-1',
+      text: 'Hello world'
+    })
+
+    appendLearningBranchStream('branch-2', 'Other')
+    expect($learningBranchStream.get()).toEqual({
+      branchId: 'branch-2',
+      text: 'Other'
+    })
+
+    clearLearningBranchStream('branch-1')
+    expect($learningBranchStream.get()?.branchId).toBe('branch-2')
+    clearLearningBranchStream('branch-2')
+    expect($learningBranchStream.get()).toBeNull()
   })
 })

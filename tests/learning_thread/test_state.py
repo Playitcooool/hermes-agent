@@ -71,6 +71,14 @@ def test_branch_returns_to_exact_canonical_section_without_advancing(store):
     assert state["branches"][0]["status"] == "open"
     assert state["branches"][0]["resolution"] is None
 
+    state = store.back()
+    state = store.open_branch(question="Why use heads?", source_excerpt="multi-head attention")
+    second_branch_id = state["active_branch_id"]
+    state = store.activate_branch(branch_id)
+    second = next(item for item in state["branches"] if item["id"] == second_branch_id)
+    assert state["active_branch_id"] == branch_id
+    assert second["status"] == "unresolved"
+
 
 def test_invalid_transitions_do_not_rewrite_saved_state(store):
     original = start(store)

@@ -224,7 +224,8 @@ class LearningThreadStore:
             target_id = _clean(branch_id, "branch_id")
             active = self._active_branch(state)
             if active and active.get("id") != target_id:
-                raise LearningThreadError("return from the active side branch before opening another")
+                active["status"] = "unresolved"
+                active["resolution"] = None
             branch = next(
                 (
                     item
