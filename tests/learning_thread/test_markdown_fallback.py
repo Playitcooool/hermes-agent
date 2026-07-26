@@ -30,6 +30,23 @@ values = (x for x in range(3))
 What does `next(values)` return?
 """
 
+NUMBERED_HEADING_LESSON = """## 1) What Python generators are
+
+Generators produce values lazily instead of constructing a full collection.
+
+### Unanswered checkpoint
+
+Why can lazy evaluation reduce memory usage?
+
+## 2) Generator functions and yield
+
+## 3) Generator expressions
+
+## 4) Pipelines and composition
+
+## 5) Review and practice
+"""
+
 
 def test_parses_a_plain_markdown_lesson_response():
     parsed = parse_structured_lesson_markdown("Teach me generators", LESSON)
@@ -60,6 +77,33 @@ def test_materializes_missing_state_without_overwriting_it(tmp_path, monkeypatch
     assert second == first
     assert first["active_branch_id"] is None
     assert len(first["outline"]) == 5
+
+
+def test_materializes_numbered_heading_lesson_without_wrapper(tmp_path, monkeypatch):
+    monkeypatch.setenv("HERMES_HOME", str(tmp_path))
+
+    state = materialize_structured_lesson_fallback(
+        "numbered-headings",
+        "Teach me Python generators as a structured lesson",
+        NUMBERED_HEADING_LESSON,
+    )
+
+    assert state is not None
+    assert state["topic"] == "Python generators"
+    assert state["sections"][0]["status"] == "current"
+    assert state["sections"][0]["checkpoint_answer"] is None
+    assert state["sections"][0]["readiness"] is None
+    assert [item["title"] for item in state["outline"]] == [
+        "What Python generators are",
+        "Generator functions and yield",
+        "Generator expressions",
+        "Pipelines and composition",
+        "Review and practice",
+    ]
+    assert state["sections"][0]["title"] == "What Python generators are"
+    assert state["sections"][0]["checkpoint"] == (
+        "Why can lazy evaluation reduce memory usage?"
+    )
 
 
 def test_materializes_continuation_and_branch_fallbacks(tmp_path, monkeypatch):

@@ -17,8 +17,13 @@ _SECTION_RE = re.compile(
     r"^#{1,4}\s*Section\s+\d+\s*(?:[:—-]\s*)?(.+?)\s*$",
     re.IGNORECASE,
 )
+_NUMBERED_SECTION_RE = re.compile(
+    r"^#{1,4}\s*(\d+)\s*[.)]\s*(.+?)\s*$",
+    re.IGNORECASE,
+)
 _CHECKPOINT_RE = re.compile(
-    r"^#{1,4}\s*(?:Checkpoint|Understanding\s+check)\b.*$",
+    r"^#{1,4}\s*(?:(?:Unanswered|Pending)\s+)?"
+    r"(?:Checkpoint|Understanding\s+check)\b.*$",
     re.IGNORECASE,
 )
 
@@ -28,6 +33,16 @@ def _plain_heading(text: str) -> str:
     value = re.sub(r"^\*{1,2}|\*{1,2}$", "", value)
     value = re.sub(r"^`|`$", "", value)
     return value.strip()
+
+
+def _topic_from_section(section_title: str) -> str:
+    """Derive a useful topic when the provider omitted a lesson title."""
+    match = re.match(
+        r"^What\s+(.+?)\s+(?:is|are)\??$",
+        section_title,
+        re.IGNORECASE,
+    )
+    return _plain_heading(match.group(1)) if match else section_title
 
 
 def parse_structured_lesson_markdown(
@@ -40,15 +55,24 @@ def parse_structured_lesson_markdown(
         return None
 
     topic_match = _TOPIC_RE.search(markdown)
-    topic = _plain_heading(topic_match.group(1)) if topic_match else "Structured lesson"
     lines = markdown.splitlines()
 
     outline: list[dict[str, str]] = []
     section_index = None
     section_title = ""
     checkpoint_index = None
+    numbered_sections: list[tuple[int, int, str]] = []
 
     for index, line in enumerate(lines):
+        numbered_match = _NUMBERED_SECTION_RE.match(line.strip())
+        if numbered_match:
+            numbered_sections.append(
+                (
+                    index,
+                    int(numbered_match.group(1)),
+                    _plain_heading(numbered_match.group(2)),
+                )
+            )
         section_match = _SECTION_RE.match(line.strip())
         if section_match:
             section_index = index
@@ -65,6 +89,17 @@ def parse_structured_lesson_markdown(
                     }
                 )
 
+    if section_index is None and numbered_sections:
+        section_index, _, section_title = numbered_sections[0]
+        outline = [
+            {
+                "title": title,
+                "purpose": f"Understand {title}",
+            }
+            for _, _, title in sorted(numbered_sections, key=lambda item: item[1])
+            if title
+        ]
+
     if section_index is None or not section_title:
         return None
 
@@ -77,7 +112,12 @@ def parse_structured_lesson_markdown(
 
     content = "\n".join(lines[section_index + 1 : checkpoint_index]).strip()
     content = re.sub(r"\n+---\s*$", "", content).strip()
-    checkpoint = "\n".join(lines[checkpoint_index + 1 :]).strip()
+    checkpoint_end = len(lines)
+    for index in range(checkpoint_index + 1, len(lines)):
+        if _NUMBERED_SECTION_RE.match(lines[index].strip()):
+            checkpoint_end = index
+            break
+    checkpoint = "\n".join(lines[checkpoint_index + 1 : checkpoint_end]).strip()
     if not content or not checkpoint:
         return None
 
@@ -90,6 +130,12 @@ def parse_structured_lesson_markdown(
         ]
     else:
         outline[0]["title"] = section_title
+
+    topic = (
+        _plain_heading(topic_match.group(1))
+        if topic_match
+        else _topic_from_section(section_title)
+    )
 
     return {
         "topic": topic,
@@ -144,7 +190,9 @@ def materialize_lesson_continuation_fallback(
     section_index = None
     checkpoint_index = None
     for index, line in enumerate(lines):
-        if _SECTION_RE.match(line.strip()):
+        if _SECTION_RE.match(line.strip()) or _NUMBERED_SECTION_RE.match(
+            line.strip()
+        ):
             section_index = index
             break
     if section_index is None:
@@ -157,7 +205,12 @@ def materialize_lesson_continuation_fallback(
         return None
 
     content = "\n".join(lines[section_index + 1 : checkpoint_index]).strip()
-    checkpoint = "\n".join(lines[checkpoint_index + 1 :]).strip()
+    checkpoint_end = len(lines)
+    for index in range(checkpoint_index + 1, len(lines)):
+        if _NUMBERED_SECTION_RE.match(lines[index].strip()):
+            checkpoint_end = index
+            break
+    checkpoint = "\n".join(lines[checkpoint_index + 1 : checkpoint_end]).strip()
     if not content or not checkpoint:
         return None
     try:
