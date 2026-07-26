@@ -15,7 +15,7 @@ while `BTW` questions run as anchored side branches in the right panel.
 - Fork: `https://github.com/Playitcooool/hermes-agent`
 - Branch: `learning-thread-app`
 - Upstream: `https://github.com/NousResearch/hermes-agent.git`
-- Latest functional commit: `871e9fece`
+- Latest functional commit: `c4ff7b420`
 
 Before changing distribution behavior, verify the remotes, worktree, and recent
 history:
@@ -62,6 +62,13 @@ git log --oneline -15
 - Historical branches are resumable: selecting one shows its chat and composer;
   sending the next message durably reopens that exact branch and continues with
   only its isolated message history.
+- Branch history is consolidated into the top-bar branch icon and count badge.
+  Selecting a branch opens its chat at the latest message; switching while
+  another branch is active leaves the previous branch unresolved.
+- Isolated answers stream at a UI-friendly maximum of roughly 30 updates per
+  second. The branch viewport follows new tokens while parked at the bottom,
+  releases immediately on scrollbar/wheel/touch scrolling, shows a jump-to-
+  latest affordance, and re-arms when the user returns to the bottom.
 - Side-panel stream, reasoning, and tool events never leak into the main
   transcript.
 
@@ -131,6 +138,7 @@ Always confirm `install-stamp.json` matches `git rev-parse HEAD` and has
 10. `59acf7f4d` — deterministic BTW replies and simplified right panel
 11. `a7c46481c` — quarantined BTW request and chat-style branch panel
 12. `871e9fece` — resumable historical BTW branches
+13. `c4ff7b420` — top-bar branch navigation and streaming follow behavior
 
 Earlier foundational commits remain in Git history.
 
@@ -138,8 +146,8 @@ Earlier foundational commits remain in Git history.
 
 Automated checks after the quarantined BTW change:
 
-- Focused Python learning/gateway checks: 26/26
-- Desktop learning panel/store tests: 12/12
+- Focused Python learning/gateway checks: 24/24
+- Desktop learning panel/store tests: 15/15
 - Desktop TypeScript type-check: passed
 - Production Vite/Electron package build: passed
 - `git diff --check`: passed
